@@ -217,3 +217,60 @@ enum GameStatus {
 
 - IGDB (preferente)
 - RAWG (alternativa)
+
+---
+
+## Setup del Proyecto
+
+### IGDB - Obtener credenciales
+
+1. Ir a https://dev.twitch.tv/console/apps
+2. Tener email verificado y 2FA habilitado en Twitch
+3. **Register Your Application**:
+   - **Name**: nombre único (ej: `gamevault-api`)
+   - **OAuth Redirect URLs**: `https://localhost`
+   - **Category**: `Application Integration`
+   - **Client Type**: `Confidential` (obligatorio para Client Secret)
+4. Copiar **Client ID** y generar **New Secret**
+5. Setear en Railway:
+   ```bash
+   railway variables set IGDB_CLIENT_ID=xxx IGDB_CLIENT_SECRET=xxx
+   ```
+   O desde el dashboard: Service → Variables
+
+### Railway - Deploy del Backend
+
+```bash
+# Instalar CLI y login
+npm i -g @railway/cli
+railway login
+
+# Desde gamevault_server/
+railway init
+railway add -d postgresql
+railway up
+
+# Ver logs si algo falla
+railway logs
+```
+
+Railway provee automáticamente `DATABASE_URL`, `PORT` y corre `prisma migrate deploy` al arrancar.
+
+### Local - Desarrollo
+
+```bash
+# Backend
+cd gamevault_server
+pnpm install
+cp .env.example .env
+# Editar .env con DB local y credenciales IGDB
+pnpm prisma migrate dev --name init
+pnpm dev
+
+# Frontend (otra terminal)
+cd gamevault_frontend
+pnpm install
+pnpm dev
+```
+
+Backend corre en `http://localhost:3001` y frontend en `http://localhost:5173` (con proxy al backend).
