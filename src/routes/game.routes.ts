@@ -13,6 +13,6 @@ router.patch('/games/:id/hours', authMiddleware, controller.updateHours);
 router.patch('/games/:id/notes', authMiddleware, controller.updateNotes);
 router.delete('/games/:id', authMiddleware, controller.deleteGame);
 router.get('/dashboard', authMiddleware, controller.dashboard);
-router.get('/image-proxy', authMiddleware, controller.imageProxy);
+router.get('/image-proxy', controller.imageProxy);
 
 export default router;

@@ -1,4 +1,4 @@
-import { type Response, type NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 import { GameStatus } from '@prisma/client';
 import * as gameService from '../services/game.service.js';
 import type { AuthRequest } from '../middleware/auth.js';
@@ -115,7 +115,7 @@ export async function getUserGameIds(req: AuthRequest, res: Response, next: Next
   }
 }
 
-export async function imageProxy(req: AuthRequest, res: Response, next: NextFunction) {
+export async function imageProxy(req: Request, res: Response, next: NextFunction) {
   try {
     const imageUrl = req.query.url as string;
     if (!imageUrl) {
