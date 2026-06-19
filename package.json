@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc && prisma generate",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
+    "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
@@ -18,9 +19,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
     "express": "^4.21.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "esbuild"]
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
