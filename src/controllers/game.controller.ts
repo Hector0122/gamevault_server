@@ -41,7 +41,7 @@ export async function listGames(_req: Request, res: Response, next: NextFunction
 
 export async function updateStatus(req: Request, res: Response, next: NextFunction) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { status } = req.body;
 
     const validStatuses: GameStatus[] = ['WISHLIST', 'OWNED', 'PLAYING', 'COMPLETED', 'DROPPED'];
