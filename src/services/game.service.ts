@@ -68,7 +68,7 @@ export async function updateGameHours(gameId: string, hoursPlayed: number) {
 }
 
 export async function removeGame(gameId: string) {
-  return prisma.game.delete({ where: { id: gameId } });
+  return prisma.userGame.deleteMany({ where: { gameId } });
 }
 
 export async function getDashboard() {
