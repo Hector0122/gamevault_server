@@ -68,6 +68,13 @@ export async function updateGameHours(gameId: string, hoursPlayed: number) {
   });
 }
 
+export async function updateGameNotes(gameId: string, data: { rating?: number | null; notes?: string | null }) {
+  return prisma.userGame.updateMany({
+    where: { gameId },
+    data,
+  });
+}
+
 export async function removeGame(gameId: string) {
   return prisma.userGame.deleteMany({ where: { gameId } });
 }

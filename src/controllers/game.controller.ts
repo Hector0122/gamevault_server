@@ -58,6 +58,17 @@ export async function updateStatus(req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function updateNotes(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const { rating, notes } = req.body;
+    await gameService.updateGameNotes(id, { rating, notes });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function deleteGame(req: Request, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
