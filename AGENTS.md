@@ -179,6 +179,7 @@ La API apunta a:
 - Notas y calificaciones
 - Colecciones por plataforma/género
 - Backlog inteligente con horas estimadas
+- Sincronización con Steam (importar biblioteca automáticamente)
 
 ---
 
@@ -188,6 +189,29 @@ La API apunta a:
 - **Imágenes**: Fresco (image loader de RN en Android) no carga URLs directas del CDN de IGDB (CloudFront). Solución: proxy en backend (`/api/image-proxy`) que fetchea y retorna la imagen con Content-Type correcto.
 - **Duración**: IGDB v4 tiene `time_to_beat` en un endpoint separado `game_time_to_beats`. Se consulta en batch tras la búsqueda y se mergea con los resultados. Los valores vienen en segundos; se almacenan en minutos.
 - **Railway**: usa pnpm v9 + Nixpacks. El build ejecuta `prisma generate` vía `postinstall` y `prisma generate && tsc` en el build script. Railway usa `--frozen-lockfile`.
+
+---
+
+## Steam Sync (Plan)
+
+### Backend
+- Obtener `STEAM_API_KEY` en https://steamcommunity.com/dev/apikey
+- Endpoint: `POST /api/import/steam` recibe `steamId`
+- Llama a `https://api.steampowered.com/ISteamUser/GetOwnedGames/v1/?key=XXX&steamid=YYY`
+- Por cada juego: buscar en IGDB por nombre (con rate limiting), crear Game si no existe, crear UserGame como OWNED
+- Saltar juegos ya existentes en la biblioteca del usuario
+- Proceso async con feedback de progreso (WebSocket o polling)
+
+### Frontend
+- Botón "Importar desde Steam" en Dashboard
+- Input para pegar Steam ID o detectar automáticamente si se vincula cuenta
+- Barra de progreso durante la importación
+- Resumen al final: "X juegos importados, Y ya existían, Z no encontrados"
+
+### API Key necesaria
+- `STEAM_API_KEY` → variable de entorno en Railway
+
+---
 
 ## Railway (Producción)
 
