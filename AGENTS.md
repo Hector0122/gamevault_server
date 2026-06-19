@@ -65,11 +65,16 @@ src/
 |--------|------|-------------|
 | GET | `/api/search?q=&offset=` | Buscar juegos en IGDB (paginado) |
 | POST | `/api/games` | Agregar juego a colección |
-| GET | `/api/games` | Listar biblioteca |
+| GET | `/api/games` | Listar biblioteca del usuario |
+| GET | `/api/games/ids` | IDs externos de juegos en biblioteca |
 | PATCH | `/api/games/:id/status` | Cambiar estado |
 | PATCH | `/api/games/:id/hours` | Actualizar horas jugadas |
-| GET | `/api/dashboard` | Estadísticas |
+| PATCH | `/api/games/:id/notes` | Actualizar notas y rating |
+| DELETE | `/api/games/:id` | Eliminar juego de biblioteca |
+| GET | `/api/dashboard` | Estadísticas + horas restantes estimadas |
 | GET | `/api/image-proxy?url=` | Proxy de imágenes para Android |
+| POST | `/api/auth/register` | Registrar usuario |
+| POST | `/api/auth/login` | Iniciar sesión (JWT) |
 
 ---
 
@@ -162,24 +167,30 @@ La API apunta a:
 
 ## Estado
 
+### Implementado
 - [x] Backend en Railway con Express + Prisma + PostgreSQL
 - [x] Búsqueda IGDB con paginación (offset, 20 por página)
 - [x] CRUD juegos y estados
-- [x] Dashboard de estadísticas
+- [x] Dashboard de estadísticas con backlog (horas restantes estimadas)
+- [x] Autenticación JWT (registro/login con email y contraseña)
 - [x] Duración estimada desde IGDB (rápido / normal / completista)
-- [x] Horas jugadas (edición inline desde biblioteca)
+- [x] Horas jugadas, notas y rating (edición inline desde biblioteca)
 - [x] Proxy de imágenes (Android no carga CloudFront directo)
-- [x] Grid 3 columnas en resultados
+- [x] Grid 3 columnas en resultados de búsqueda
 - [x] Safe area insets
-- [x] App con 3 tabs: Dashboard, Buscar, Biblioteca
+- [x] Biblioteca con filtros colapsables (estado, plataforma, género) y ordenamiento (reciente, A-Z, horas, rating)
+- [x] Pull-to-refresh en biblioteca y dashboard
+- [x] Badge "En colección ✓" en resultados de búsqueda y detalle
 - [x] Pantalla de detalle con selector de estado
+- [x] Perfil 👤 en header navega al Dashboard (con cerrar sesión)
+- [x] MMKV para persistencia local (token + datos de sesión)
 
-### Pendiente
+### Pendiente / Planificado
 - iOS (no prioritario)
-- Notas y calificaciones
-- Colecciones por plataforma/género
-- Backlog inteligente con horas estimadas
-- Sincronización con Steam (importar biblioteca automáticamente)
+- Sincronización Steam (importar biblioteca automáticamente)
+- Colecciones por plataforma/género (vista agrupada)
+- Backlog inteligente mejorado (tiempo restante ponderado por prioridad)
+
 
 ---
 
