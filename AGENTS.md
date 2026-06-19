@@ -198,11 +198,11 @@ enum GameStatus {
 
 ## Tecnologías
 
-### Frontend
+### Frontend (Android)
 
-- React
+- React Native 0.86 (bare workflow)
 - TypeScript
-- Tailwind CSS
+- React Navigation (bottom tabs + native stack)
 
 ### Backend
 
@@ -215,8 +215,8 @@ enum GameStatus {
 
 ### API Externa
 
-- IGDB (preferente)
-- RAWG (alternativa)
+- IGDB (en uso)
+- RAWG (alternativa, no implementada)
 
 ---
 
@@ -266,11 +266,49 @@ cp .env.example .env
 # Editar .env con DB local y credenciales IGDB
 pnpm prisma migrate dev --name init
 pnpm dev
+# Backend corre en http://localhost:3001
 
-# Frontend (otra terminal)
+# Frontend Android
 cd gamevault_frontend
 pnpm install
-pnpm dev
+npx react-native run-android
+# Requiere Android Studio + SDK + dispositivo/emulador
 ```
 
-Backend corre en `http://localhost:3001` y frontend en `http://localhost:5173` (con proxy al backend).
+## Repos
+
+- Backend: https://github.com/Hector0122/gamevault_server
+- Frontend: https://github.com/Hector0122/gamevault_frontend
+
+## Railway (Producción)
+
+- Backend: https://gamevaultserver-production.up.railway.app
+- PostgreSQL vinculado automáticamente (DATABASE_URL inyectada)
+- Migraciones corren con `prisma migrate deploy` al arrancar
+- IGDB_CLIENT_ID e IGDB_CLIENT_SECRET configurados como variables
+
+## Estado Actual (MVP completado)
+
+- [x] Backend en Railway con Express + Prisma + PostgreSQL
+- [x] CRUD de juegos y estados
+- [x] Búsqueda desde IGDB
+- [x] Dashboard de estadísticas
+- [x] App Android con 3 tabs (Dashboard, Buscar, Biblioteca)
+- [x] Pantalla de detalle del juego con selector de estado
+- [x] Conexión al backend de Railway en producción
+
+### Pendiente / Conocido
+
+- **Imágenes IGDB no cargan en Android** — las URLs son correctas y accesibles vía curl, pero Fresco (image loader de React Native en Android) no las muestra. Posible causa: User-Agent, certificados, o configuración de Fresco. Pendiente de resolver.
+- iOS no implementado (no prioritario)
+- Notas personales y calificaciones
+- Seguimiento de horas jugadas
+- Colecciones por plataforma/género
+
+## Decisiones de Arquitectura
+
+- Proyecto separado en dos repos (gamevault_server + gamevault_frontend)
+- Frontend migró de React Web → React Native (Android focus)
+- Pnpm como package manager
+- Navigation: @react-navigation/bottom-tabs + native-stack
+- API_URL en desarrollo apunta a localhost (10.0.2.2 en Android emulator), en prod a Railway
