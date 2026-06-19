@@ -18,7 +18,7 @@ La información base de los videojuegos será obtenida desde una API externa (IG
 
 ---
 
-## Características Iniciales (MVP)
+## Características Implementadas
 
 ### Biblioteca Personal
 
@@ -32,6 +32,7 @@ Cada juego contiene:
 - Plataformas disponibles
 - Géneros
 - Fecha de lanzamiento
+- Duración estimada (tiempo para completar, desde IGDB)
 
 ### Estados de Juego
 
@@ -45,13 +46,14 @@ Cada videojuego puede encontrarse en uno de los siguientes estados:
 
 ### Búsqueda
 
-Permite buscar videojuegos mediante una API externa.
+Permite buscar videojuegos mediante IGDB.
 
 Funciones:
 
 - Buscar por nombre.
-- Ver detalles del juego.
-- Agregar a la colección personal.
+- Ver detalles del juego (sinopsis, plataformas, géneros, duración estimada).
+- Agregar a la colección personal con estado inicial.
+- Paginación (20 resultados por página, offset vía query param).
 
 ### Dashboard
 
@@ -63,91 +65,9 @@ Mostrar:
 - Juegos pendientes.
 - Juegos abandonados.
 
----
+### Horas Jugadas
 
-## Funcionalidades Futuras
-
-### Backlog Inteligente
-
-Calcular:
-
-- Cantidad de juegos pendientes.
-- Horas estimadas para completar el backlog.
-- Tiempo promedio para terminar un juego.
-
-### Seguimiento de Tiempo
-
-Registrar:
-
-- Horas jugadas.
-- Sesiones de juego.
-- Fecha de inicio.
-- Fecha de finalización.
-
-### Colecciones
-
-Agrupar por:
-
-- Plataforma
-- Franquicia
-- Género
-- Desarrolladora
-
-Ejemplos:
-
-- Resident Evil
-- Final Fantasy
-- Fallout
-- Wasteland
-
-### Wishlist
-
-Lista de juegos deseados con:
-
-- Prioridad
-- Precio objetivo
-- Fecha de agregado
-
-### Notas Personales
-
-Permitir registrar:
-
-- Opiniones
-- Calificaciones
-- Comentarios
-- Guías o enlaces útiles
-
----
-
-## Estadísticas
-
-### Generales
-
-- Juegos comprados
-- Juegos completados
-- Juegos abandonados
-- Porcentaje de finalización
-
-### Por Plataforma
-
-- PC
-- Xbox
-- PlayStation
-- Nintendo Switch
-
-### Por Género
-
-- RPG
-- Estrategia
-- Acción
-- Terror
-- Simulación
-
-### Anuales
-
-- Juegos terminados por año
-- Horas jugadas por año
-- Género más jugado
+Registro manual de horas jugadas por juego, editable desde la biblioteca.
 
 ---
 
@@ -165,6 +85,9 @@ interface Game {
   releaseDate: Date;
   platforms: string[];
   genres: string[];
+  timeToBeatHastly: number | null;  // minutos
+  timeToBeatNormally: number | null;
+  timeToBeatCompletely: number | null;
 }
 ```
 
@@ -216,7 +139,7 @@ enum GameStatus {
 ### API Externa
 
 - IGDB (en uso)
-- RAWG (alternativa, no implementada)
+- `game_time_to_beats` endpoint para obtener duración estimada (endpoint separado, no incluido en `games`)
 
 ---
 
@@ -286,29 +209,42 @@ npx react-native run-android
 - PostgreSQL vinculado automáticamente (DATABASE_URL inyectada)
 - Migraciones corren con `prisma migrate deploy` al arrancar
 - IGDB_CLIENT_ID e IGDB_CLIENT_SECRET configurados como variables
+- Start command: `prisma migrate deploy && node dist/index.js`
 
-## Estado Actual (MVP completado)
+## API Endpoints
+
+| Method | Path | Descripción |
+|--------|------|-------------|
+| GET | /api/search?q=&offset= | Buscar juegos en IGDB |
+| POST | /api/games | Agregar juego a colección |
+| GET | /api/games | Listar biblioteca |
+| PATCH | /api/games/:id/status | Cambiar estado |
+| PATCH | /api/games/:id/hours | Actualizar horas jugadas |
+| GET | /api/dashboard | Estadísticas |
+| GET | /api/image-proxy?url= | Proxy de imágenes (para Android) |
+
+## Estado Actual
 
 - [x] Backend en Railway con Express + Prisma + PostgreSQL
 - [x] CRUD de juegos y estados
-- [x] Búsqueda desde IGDB
+- [x] Búsqueda desde IGDB con paginación
 - [x] Dashboard de estadísticas
-- [x] App Android con 3 tabs (Dashboard, Buscar, Biblioteca)
-- [x] Pantalla de detalle del juego con selector de estado
-- [x] Conexión al backend de Railway en producción
+- [x] Duración estimada desde IGDB (game_time_to_beats)
+- [x] Horas jugadas (CRUD)
+- [x] Proxy de imágenes para Android
+- [x] App Android con 3 tabs + grid 3 columnas + safe area
 
-### Pendiente / Conocido
+### Pendiente
 
-- **Imágenes IGDB no cargan en Android** — las URLs son correctas y accesibles vía curl, pero Fresco (image loader de React Native en Android) no las muestra. Posible causa: User-Agent, certificados, o configuración de Fresco. Pendiente de resolver.
-- iOS no implementado (no prioritario)
+- iOS (no prioritario)
 - Notas personales y calificaciones
-- Seguimiento de horas jugadas
 - Colecciones por plataforma/género
+- Backlog inteligente con horas estimadas
 
 ## Decisiones de Arquitectura
 
 - Proyecto separado en dos repos (gamevault_server + gamevault_frontend)
-- Frontend migró de React Web → React Native (Android focus)
 - Pnpm como package manager
-- Navigation: @react-navigation/bottom-tabs + native-stack
-- API_URL en desarrollo apunta a localhost (10.0.2.2 en Android emulator), en prod a Railway
+- Railway usa pnpm v9 + Nixpacks; el build incluye `postinstall: prisma generate` + `build: prisma generate && tsc`
+- Image proxy: El CDN de IGDB (CloudFront) no era accesible directamente desde React Native en Android (Fresco). Se agregó un endpoint `/api/image-proxy` que fetchea la imagen y la sirve con Content-Type correcto.
+- Duración: IGDB v4 tiene la duración en un endpoint separado `game_time_to_beats`. Se consulta en batch tras la búsqueda.
