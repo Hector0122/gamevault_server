@@ -186,7 +186,6 @@ La API apunta a:
 - [x] MMKV para persistencia local (token + datos de sesión)
 
 ### Pendiente / Planificado
-- iOS (no prioritario)
 - Sincronización Steam (importar biblioteca automáticamente)
 - Colecciones por plataforma/género (vista agrupada)
 - Backlog inteligente mejorado (tiempo restante ponderado por prioridad)
