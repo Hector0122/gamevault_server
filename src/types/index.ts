@@ -1,3 +1,11 @@
+export interface IGDBTimeToBeat {
+  id: number;
+  game_id: number;
+  hastily: number | null;
+  normally: number | null;
+  completely: number | null;
+}
+
 export interface IGDBGame {
   id: number;
   name: string;
@@ -6,11 +14,7 @@ export interface IGDBGame {
   first_release_date?: number;
   platforms?: { name: string }[];
   genres?: { name: string }[];
-  time_to_beat?: {
-    hastly: number | null;
-    normally: number | null;
-    completely: number | null;
-  };
+  time_to_beat?: IGDBTimeToBeat | null;
 }
 
 export interface SearchQuery {

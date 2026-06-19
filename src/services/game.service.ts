@@ -33,7 +33,7 @@ export async function addGameToCollection(externalId: number) {
         : new Date(0),
       platforms: igdbGame.platforms?.map((p) => p.name) ?? [],
       genres: igdbGame.genres?.map((g) => g.name) ?? [],
-      timeToBeatHastly: ttb?.hastly ? Math.round(ttb.hastly / 60) : null,
+      timeToBeatHastly: ttb?.hastily ? Math.round(ttb.hastily / 60) : null,
       timeToBeatNormally: ttb?.normally ? Math.round(ttb.normally / 60) : null,
       timeToBeatCompletely: ttb?.completely ? Math.round(ttb.completely / 60) : null,
     },

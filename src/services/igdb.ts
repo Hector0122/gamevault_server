@@ -51,19 +51,46 @@ async function igdbFetch<T>(endpoint: string, body: string): Promise<T> {
 }
 
 export async function searchGames(query: string, offset = 0): Promise<IGDBGame[]> {
-  return igdbFetch<IGDBGame[]>('games', `
+  const games = await igdbFetch<IGDBGame[]>('games', `
     search "${query}";
-    fields name,summary,cover.url,first_release_date,platforms.name,genres.name,time_to_beat.*;
+    fields name,summary,cover.url,first_release_date,platforms.name,genres.name;
     limit 20;
     offset ${offset};
   `);
+
+  const ids = games.map((g) => g.id);
+  if (ids.length === 0) return [];
+
+  const tts = await igdbFetch<IGDBTimeToBeat[]>('game_time_to_beats', `
+    fields hastily,normally,completely;
+    where game_id = (${ids.join(',')});
+  `);
+
+  const ttbMap = new Map(tts.map((tt) => [tt.game_id, tt]));
+
+  return games.map((game) => ({
+    ...game,
+    time_to_beat: ttbMap.get(game.id) ?? null,
+  }));
 }
 
 export async function getGameById(id: number): Promise<IGDBGame | null> {
-  const games = await igdbFetch<IGDBGame[]>('games', `
-    where id = ${id};
-    fields name,summary,cover.url,first_release_date,platforms.name,genres.name,time_to_beat.*;
-    limit 1;
-  `);
-  return games[0] ?? null;
+  const [game, ttb] = await Promise.all([
+    igdbFetch<IGDBGame[]>('games', `
+      where id = ${id};
+      fields name,summary,cover.url,first_release_date,platforms.name,genres.name;
+      limit 1;
+    `),
+    igdbFetch<IGDBTimeToBeat[]>('game_time_to_beats', `
+      fields hastily,normally,completely;
+      where game_id = ${id};
+    `),
+  ]);
+
+  if (!game[0]) return null;
+
+  return {
+    ...game[0],
+    time_to_beat: ttb[0] ?? null,
+  };
 }
