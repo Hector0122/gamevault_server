@@ -106,6 +106,15 @@ export async function dashboard(req: AuthRequest, res: Response, next: NextFunct
   }
 }
 
+export async function getUserGameIds(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const ids = await gameService.getUserGameExternalIds(req.userId!);
+    res.json({ ids });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function imageProxy(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const imageUrl = req.query.url as string;

@@ -84,12 +84,20 @@ export async function removeGame(userId: string, gameId: string) {
 }
 
 export async function getDashboard(userId: string) {
-  const [total, byStatus] = await Promise.all([
+  const [total, byStatus, backlog] = await Promise.all([
     prisma.userGame.count({ where: { userId } }),
     prisma.userGame.groupBy({
       by: ['status'],
       where: { userId },
       _count: true,
+    }),
+    prisma.userGame.findMany({
+      where: {
+        userId,
+        status: { in: ['WISHLIST', 'OWNED', 'PLAYING'] },
+        game: { timeToBeatNormally: { not: null } },
+      },
+      select: { game: { select: { timeToBeatNormally: true } } },
     }),
   ]);
 
@@ -105,5 +113,18 @@ export async function getDashboard(userId: string) {
     stats[entry.status] = entry._count;
   }
 
-  return { total, ...stats };
+  const estimatedHoursRemaining = backlog.reduce(
+    (sum, ug) => sum + (ug.game.timeToBeatNormally ?? 0),
+    0,
+  );
+
+  return { total, ...stats, estimatedHoursRemaining: Math.round(estimatedHoursRemaining / 60 * 10) / 10 };
+}
+
+export async function getUserGameExternalIds(userId: string) {
+  const rows = await prisma.userGame.findMany({
+    where: { userId },
+    select: { game: { select: { externalId: true } } },
+  });
+  return rows.map((r) => r.game.externalId);
 }
