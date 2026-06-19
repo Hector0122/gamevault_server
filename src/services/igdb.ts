@@ -1,4 +1,4 @@
-import { IGDBGame } from '../types/index.js';
+import { IGDBGame, IGDBTimeToBeat } from '../types/index.js';
 
 const IGDB_URL = 'https://api.igdb.com/v4';
 let accessToken: string | null = null;

@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import * as controller from '../controllers/game.controller.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.get('/search', controller.search);
 router.post('/games', controller.addGame);
