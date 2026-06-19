@@ -67,6 +67,10 @@ export async function updateGameHours(gameId: string, hoursPlayed: number) {
   });
 }
 
+export async function removeGame(gameId: string) {
+  return prisma.game.delete({ where: { id: gameId } });
+}
+
 export async function getDashboard() {
   const [total, byStatus] = await Promise.all([
     prisma.userGame.count(),

@@ -58,6 +58,16 @@ export async function updateStatus(req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function deleteGame(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    await gameService.removeGame(id);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function updateHours(req: Request, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
