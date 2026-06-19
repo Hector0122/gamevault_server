@@ -58,6 +58,23 @@ export async function updateStatus(req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function updateHours(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const { hoursPlayed } = req.body;
+
+    if (typeof hoursPlayed !== 'number' || hoursPlayed < 0) {
+      res.status(400).json({ error: 'hoursPlayed must be a non-negative number' });
+      return;
+    }
+
+    await gameService.updateGameHours(id, hoursPlayed);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function dashboard(_req: Request, res: Response, next: NextFunction) {
   try {
     const stats = await gameService.getDashboard();

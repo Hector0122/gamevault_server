@@ -18,6 +18,8 @@ export async function addGameToCollection(externalId: number) {
     throw new Error(`Game with ID ${externalId} not found on IGDB`);
   }
 
+  const ttb = igdbGame.time_to_beat;
+
   return prisma.game.create({
     data: {
       externalId: igdbGame.id,
@@ -31,6 +33,9 @@ export async function addGameToCollection(externalId: number) {
         : new Date(0),
       platforms: igdbGame.platforms?.map((p) => p.name) ?? [],
       genres: igdbGame.genres?.map((g) => g.name) ?? [],
+      timeToBeatHastly: ttb?.hastly ? Math.round(ttb.hastly / 60) : null,
+      timeToBeatNormally: ttb?.normally ? Math.round(ttb.normally / 60) : null,
+      timeToBeatCompletely: ttb?.completely ? Math.round(ttb.completely / 60) : null,
     },
   });
 }
@@ -52,6 +57,13 @@ export async function updateGameStatus(gameId: string, status: GameStatus) {
       startedAt: status === 'PLAYING' ? new Date() : undefined,
       completedAt: status === 'COMPLETED' ? new Date() : undefined,
     },
+  });
+}
+
+export async function updateGameHours(gameId: string, hoursPlayed: number) {
+  return prisma.userGame.updateMany({
+    where: { gameId },
+    data: { hoursPlayed },
   });
 }
 

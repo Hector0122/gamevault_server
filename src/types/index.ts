@@ -6,6 +6,11 @@ export interface IGDBGame {
   first_release_date?: number;
   platforms?: { name: string }[];
   genres?: { name: string }[];
+  time_to_beat?: {
+    hastly: number | null;
+    normally: number | null;
+    completely: number | null;
+  };
 }
 
 export interface SearchQuery {

@@ -24,6 +24,9 @@ model Game {
   releaseDate DateTime
   platforms   String[]
   genres      String[]
+  timeToBeatHastly     Int?
+  timeToBeatNormally   Int?
+  timeToBeatCompletely Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
