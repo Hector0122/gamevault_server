@@ -5,11 +5,12 @@ import * as gameService from '../services/game.service.js';
 export async function search(req: Request, res: Response, next: NextFunction) {
   try {
     const query = req.query.q as string;
+    const offset = parseInt(req.query.offset as string) || 0;
     if (!query || query.trim().length === 0) {
       res.status(400).json({ error: 'Query parameter "q" is required' });
       return;
     }
-    const games = await gameService.searchExternalGames(query);
+    const games = await gameService.searchExternalGames(query, offset);
     res.json(games);
   } catch (err) {
     next(err);

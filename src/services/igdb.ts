@@ -50,11 +50,12 @@ async function igdbFetch<T>(endpoint: string, body: string): Promise<T> {
   return res.json();
 }
 
-export async function searchGames(query: string): Promise<IGDBGame[]> {
+export async function searchGames(query: string, offset = 0): Promise<IGDBGame[]> {
   return igdbFetch<IGDBGame[]>('games', `
     search "${query}";
     fields name,summary,cover.url,first_release_date,platforms.name,genres.name;
     limit 20;
+    offset ${offset};
   `);
 }
 

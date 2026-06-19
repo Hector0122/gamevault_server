@@ -3,8 +3,8 @@ import { searchGames, getGameById } from './igdb.js';
 
 const prisma = new PrismaClient();
 
-export async function searchExternalGames(query: string) {
-  return searchGames(query);
+export async function searchExternalGames(query: string, offset = 0) {
+  return searchGames(query, offset);
 }
 
 export async function addGameToCollection(externalId: number) {
