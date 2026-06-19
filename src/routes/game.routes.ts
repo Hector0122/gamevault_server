@@ -8,5 +8,6 @@ router.post('/games', controller.addGame);
 router.get('/games', controller.listGames);
 router.patch('/games/:id/status', controller.updateStatus);
 router.get('/dashboard', controller.dashboard);
+router.get('/image-proxy', controller.imageProxy);
 
 export default router;

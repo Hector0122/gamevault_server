@@ -65,3 +65,29 @@ export async function dashboard(_req: Request, res: Response, next: NextFunction
     next(err);
   }
 }
+
+export async function imageProxy(req: Request, res: Response, next: NextFunction) {
+  try {
+    const imageUrl = req.query.url as string;
+    if (!imageUrl) {
+      res.status(400).json({ error: 'url parameter is required' });
+      return;
+    }
+
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      res.status(response.status).json({ error: `Failed to fetch image: ${response.statusText}` });
+      return;
+    }
+
+    const contentType = response.headers.get('content-type') ?? 'image/jpeg';
+    const buffer = await response.arrayBuffer();
+    const arr = new Uint8Array(buffer);
+
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.status(200).send(Buffer.from(arr));
+  } catch (err) {
+    next(err);
+  }
+}
