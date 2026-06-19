@@ -62,7 +62,7 @@ export async function searchGames(query: string, offset = 0): Promise<IGDBGame[]
   if (ids.length === 0) return [];
 
   const tts = await igdbFetch<IGDBTimeToBeat[]>('game_time_to_beats', `
-    fields hastily,normally,completely;
+    fields game_id,hastily,normally,completely;
     where game_id = (${ids.join(',')});
   `);
 
@@ -82,7 +82,7 @@ export async function getGameById(id: number): Promise<IGDBGame | null> {
       limit 1;
     `),
     igdbFetch<IGDBTimeToBeat[]>('game_time_to_beats', `
-      fields hastily,normally,completely;
+      fields game_id,hastily,normally,completely;
       where game_id = ${id};
     `),
   ]);
