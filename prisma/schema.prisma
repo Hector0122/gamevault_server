@@ -15,26 +15,37 @@ enum GameStatus {
   DROPPED
 }
 
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  userGames UserGame[]
+}
+
 model Game {
-  id          String   @id @default(cuid())
-  externalId  Int      @unique
-  title       String
-  description String
-  coverUrl    String
-  releaseDate DateTime
-  platforms   String[]
-  genres      String[]
+  id                  String   @id @default(cuid())
+  externalId          Int      @unique
+  title               String
+  description         String
+  coverUrl            String
+  releaseDate         DateTime
+  platforms           String[]
+  genres              String[]
   timeToBeatHastly     Int?
   timeToBeatNormally   Int?
   timeToBeatCompletely Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   userGames UserGame[]
 }
 
 model UserGame {
   id          String     @id @default(cuid())
+  userId      String
   gameId      String
   status      GameStatus @default(WISHLIST)
   rating      Int?
@@ -45,7 +56,8 @@ model UserGame {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
-  @@unique([gameId, status])
+  @@unique([userId, gameId])
 }

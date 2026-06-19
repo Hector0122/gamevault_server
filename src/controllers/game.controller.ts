@@ -1,8 +1,9 @@
-import { Request, Response, NextFunction } from 'express';
+import { type Response, type NextFunction } from 'express';
 import { GameStatus } from '@prisma/client';
 import * as gameService from '../services/game.service.js';
+import type { AuthRequest } from '../middleware/auth.js';
 
-export async function search(req: Request, res: Response, next: NextFunction) {
+export async function search(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const query = req.query.q as string;
     const offset = parseInt(req.query.offset as string) || 0;
@@ -17,7 +18,7 @@ export async function search(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function addGame(req: Request, res: Response, next: NextFunction) {
+export async function addGame(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { externalId } = req.body;
     if (!externalId) {
@@ -31,16 +32,16 @@ export async function addGame(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function listGames(_req: Request, res: Response, next: NextFunction) {
+export async function listGames(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const games = await gameService.getUserGames();
+    const games = await gameService.getUserGames(req.userId!);
     res.json(games);
   } catch (err) {
     next(err);
   }
 }
 
-export async function updateStatus(req: Request, res: Response, next: NextFunction) {
+export async function updateStatus(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
     const { status } = req.body;
@@ -51,35 +52,35 @@ export async function updateStatus(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    await gameService.updateGameStatus(id, status);
+    await gameService.updateGameStatus(req.userId!, id, status);
     res.json({ success: true });
   } catch (err) {
     next(err);
   }
 }
 
-export async function updateNotes(req: Request, res: Response, next: NextFunction) {
+export async function updateNotes(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
     const { rating, notes } = req.body;
-    await gameService.updateGameNotes(id, { rating, notes });
+    await gameService.updateGameNotes(req.userId!, id, { rating, notes });
     res.json({ success: true });
   } catch (err) {
     next(err);
   }
 }
 
-export async function deleteGame(req: Request, res: Response, next: NextFunction) {
+export async function deleteGame(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
-    await gameService.removeGame(id);
+    await gameService.removeGame(req.userId!, id);
     res.json({ success: true });
   } catch (err) {
     next(err);
   }
 }
 
-export async function updateHours(req: Request, res: Response, next: NextFunction) {
+export async function updateHours(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const id = req.params.id as string;
     const { hoursPlayed } = req.body;
@@ -89,23 +90,23 @@ export async function updateHours(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    await gameService.updateGameHours(id, hoursPlayed);
+    await gameService.updateGameHours(req.userId!, id, hoursPlayed);
     res.json({ success: true });
   } catch (err) {
     next(err);
   }
 }
 
-export async function dashboard(_req: Request, res: Response, next: NextFunction) {
+export async function dashboard(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const stats = await gameService.getDashboard();
+    const stats = await gameService.getDashboard(req.userId!);
     res.json(stats);
   } catch (err) {
     next(err);
   }
 }
 
-export async function imageProxy(req: Request, res: Response, next: NextFunction) {
+export async function imageProxy(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const imageUrl = req.query.url as string;
     if (!imageUrl) {

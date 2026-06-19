@@ -1,7 +1,9 @@
-import { PrismaClient, GameStatus } from '@prisma/client';
+import { PrismaClient, type GameStatus } from '@prisma/client';
 import { searchGames, getGameById } from './igdb.js';
 
 const prisma = new PrismaClient();
+
+export { prisma };
 
 export async function searchExternalGames(query: string, offset = 0) {
   return searchGames(query, offset);
@@ -40,18 +42,20 @@ export async function addGameToCollection(externalId: number) {
   });
 }
 
-export async function getUserGames() {
+export async function getUserGames(userId: string) {
   return prisma.userGame.findMany({
+    where: { userId },
     include: { game: true },
     orderBy: { updatedAt: 'desc' },
   });
 }
 
-export async function updateGameStatus(gameId: string, status: GameStatus) {
+export async function updateGameStatus(userId: string, gameId: string, status: GameStatus) {
   await prisma.$transaction([
-    prisma.userGame.deleteMany({ where: { gameId } }),
+    prisma.userGame.deleteMany({ where: { userId, gameId } }),
     prisma.userGame.create({
       data: {
+        userId,
         gameId,
         status,
         startedAt: status === 'PLAYING' ? new Date() : undefined,
@@ -61,29 +65,30 @@ export async function updateGameStatus(gameId: string, status: GameStatus) {
   ]);
 }
 
-export async function updateGameHours(gameId: string, hoursPlayed: number) {
+export async function updateGameHours(userId: string, gameId: string, hoursPlayed: number) {
   return prisma.userGame.updateMany({
-    where: { gameId },
+    where: { userId, gameId },
     data: { hoursPlayed },
   });
 }
 
-export async function updateGameNotes(gameId: string, data: { rating?: number | null; notes?: string | null }) {
+export async function updateGameNotes(userId: string, gameId: string, data: { rating?: number | null; notes?: string | null }) {
   return prisma.userGame.updateMany({
-    where: { gameId },
+    where: { userId, gameId },
     data,
   });
 }
 
-export async function removeGame(gameId: string) {
-  return prisma.userGame.deleteMany({ where: { gameId } });
+export async function removeGame(userId: string, gameId: string) {
+  return prisma.userGame.deleteMany({ where: { userId, gameId } });
 }
 
-export async function getDashboard() {
+export async function getDashboard(userId: string) {
   const [total, byStatus] = await Promise.all([
-    prisma.userGame.count(),
+    prisma.userGame.count({ where: { userId } }),
     prisma.userGame.groupBy({
       by: ['status'],
+      where: { userId },
       _count: true,
     }),
   ]);
