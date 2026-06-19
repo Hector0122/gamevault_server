@@ -51,8 +51,8 @@ export async function updateStatus(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    const userGame = await gameService.updateGameStatus(id, status);
-    res.json(userGame);
+    await gameService.updateGameStatus(id, status);
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

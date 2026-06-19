@@ -48,16 +48,17 @@ export async function getUserGames() {
 }
 
 export async function updateGameStatus(gameId: string, status: GameStatus) {
-  return prisma.userGame.upsert({
-    where: { gameId_status: { gameId, status } },
-    update: { status },
-    create: {
-      gameId,
-      status,
-      startedAt: status === 'PLAYING' ? new Date() : undefined,
-      completedAt: status === 'COMPLETED' ? new Date() : undefined,
-    },
-  });
+  await prisma.$transaction([
+    prisma.userGame.deleteMany({ where: { gameId } }),
+    prisma.userGame.create({
+      data: {
+        gameId,
+        status,
+        startedAt: status === 'PLAYING' ? new Date() : undefined,
+        completedAt: status === 'COMPLETED' ? new Date() : undefined,
+      },
+    }),
+  ]);
 }
 
 export async function updateGameHours(gameId: string, hoursPlayed: number) {
