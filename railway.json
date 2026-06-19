@@ -3,7 +3,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "prisma migrate deploy && node dist/index.js",
+    "startCommand": "prisma migrate resolve --rolled-back 20260619200000_add_auth 2>/dev/null; prisma migrate deploy && node dist/index.js",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
