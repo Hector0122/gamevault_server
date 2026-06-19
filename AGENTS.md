@@ -229,3 +229,27 @@ La API apunta a:
 - PostgreSQL vinculado automáticamente
 - Migraciones: `prisma migrate deploy` al arrancar
 - Variables: `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET`
+
+---
+
+## Release Build (Android)
+
+```bash
+cd gamevault_frontend
+
+# Generar keystore (solo la primera vez)
+keytool -genkey -v -keystore android/app/release.keystore -alias gamevault \
+  -keyalg RSA -keysize 2048 -validity 10000
+
+# Build release APK
+cd android
+./gradlew clean
+./gradlew assembleRelease
+
+# Instalar en dispositivo conectado
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+- `release.keystore` está en `.gitignore` (no se sube al repo)
+- Contraseñas del keystore: definidas en `android/app/build.gradle`
+- Para cambiar versiones: editar `versionCode` y `versionName` en `defaultConfig`
