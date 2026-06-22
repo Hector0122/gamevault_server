@@ -15,6 +15,12 @@ enum GameStatus {
   DROPPED
 }
 
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
 model User {
   id        String     @id @default(cuid())
   email     String     @unique
@@ -53,6 +59,7 @@ model UserGame {
   hoursPlayed Float?
   startedAt   DateTime?
   completedAt DateTime?
+  priority    Priority?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

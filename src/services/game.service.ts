@@ -1,4 +1,4 @@
-import { PrismaClient, type GameStatus } from '@prisma/client';
+import { PrismaClient, type GameStatus, type Priority } from '@prisma/client';
 import { searchGames, getGameById } from './igdb.js';
 
 const prisma = new PrismaClient();
@@ -146,6 +146,13 @@ export async function removeGame(userId: string, gameId: string) {
   return prisma.userGame.deleteMany({ where: { userId, gameId } });
 }
 
+export async function updateGamePriority(userId: string, gameId: string, priority: Priority | null) {
+  return prisma.userGame.updateMany({
+    where: { userId, gameId },
+    data: { priority },
+  });
+}
+
 export async function getDashboard(userId: string) {
   const [total, byStatus, backlog] = await Promise.all([
     prisma.userGame.count({ where: { userId } }),
@@ -240,6 +247,14 @@ export async function getCompletedGames(userId: string) {
   return prisma.userGame.findMany({
     where: { userId, status: 'COMPLETED' },
     include: { game: { select: { title: true, genres: true } } },
+    orderBy: { updatedAt: 'desc' },
+  });
+}
+
+export async function getWishlistGames(userId: string) {
+  return prisma.userGame.findMany({
+    where: { userId, status: 'WISHLIST' },
+    include: { game: { select: { title: true, coverUrl: true, genres: true } } },
     orderBy: { updatedAt: 'desc' },
   });
 }

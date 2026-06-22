@@ -1,5 +1,5 @@
 import { type Request, type Response, type NextFunction } from 'express';
-import { GameStatus } from '@prisma/client';
+import { GameStatus, type Priority } from '@prisma/client';
 import * as gameService from '../services/game.service.js';
 import type { AuthRequest } from '../middleware/auth.js';
 
@@ -101,6 +101,22 @@ export async function updateHours(req: AuthRequest, res: Response, next: NextFun
     }
 
     await gameService.updateGameHours(req.userId!, id, hoursPlayed);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updatePriority(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const { priority } = req.body;
+    const validPriorities: (Priority | null)[] = ['HIGH', 'MEDIUM', 'LOW', null];
+    if (!validPriorities.includes(priority)) {
+      res.status(400).json({ error: 'Invalid priority. Must be HIGH, MEDIUM, LOW, or null' });
+      return;
+    }
+    await gameService.updateGamePriority(req.userId!, id, priority);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -256,6 +272,39 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
     });
 
     res.json({ recommendations });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getWishlistDeals(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const wishlist = await gameService.getWishlistGames(req.userId!);
+    if (wishlist.length === 0) {
+      res.json({ deals: [] });
+      return;
+    }
+
+    const wishlistTitles = wishlist.map(ug => ug.game.title);
+    const { checkDeals } = await import('../services/deals.service.js');
+    const deals = await checkDeals(wishlistTitles);
+
+    const { searchGameByTitle } = await import('../services/igdb.js');
+    const enrichedDeals = deals.map(d => {
+      const ug = wishlist.find(w => w.game.title.toLowerCase() === d.title.toLowerCase());
+      return {
+        title: d.title,
+        coverUrl: ug?.game.coverUrl ?? null,
+        genres: ug?.game.genres ?? [],
+        currentPrice: d.currentPrice,
+        regularPrice: d.regularPrice,
+        discount: d.discount,
+        store: d.store,
+        url: d.url,
+      };
+    });
+
+    res.json({ deals: enrichedDeals });
   } catch (err) {
     next(err);
   }
