@@ -198,27 +198,30 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
       rating: ug.rating,
     }));
 
-    // Get recommendations from Groq
+    // Get all user's library titles to exclude from recommendations
+    const allTitles = await gameService.getAllUserGameTitles(req.userId!);
+
+    // Get recommendations from Groq (excluding owned games by exact title)
     const { recommendGames } = await import('../services/groq.service.js');
-    const recommendedTitles = await recommendGames(completedGames);
+    let recommendedTitles = await recommendGames(completedGames, allTitles);
+
+    // Filter with fuzzy matching: remove games similar to any owned game
+    const { isSimilarTitle } = await import('../services/deals.service.js');
+    recommendedTitles = recommendedTitles.filter(
+      rec => !allTitles.some(owned => isSimilarTitle(rec, owned))
+    );
 
     if (recommendedTitles.length === 0) {
-      res.json({ recommendations: [], message: 'No se pudieron generar recomendaciones' });
+      res.json({ recommendations: [], message: 'No se pudieron generar recomendaciones nuevas' });
       return;
     }
 
-    // Find those games in local DB
-    const dbGames = await gameService.findGamesByTitles(recommendedTitles);
-    const foundMap = new Map(dbGames.map(g => [g.title.toLowerCase(), g]));
-
-    // Search IGDB for covers of games not in library
+    // Search IGDB for covers of all recommended games
     const { searchGameByTitle } = await import('../services/igdb.js');
-    const coverPromises = recommendedTitles
-      .filter(t => !foundMap.has(t.toLowerCase()))
-      .map(async (title) => {
-        const igdbResult = await searchGameByTitle(title);
-        return { title: title.toLowerCase(), igdbResult };
-      });
+    const coverPromises = recommendedTitles.map(async (title) => {
+      const igdbResult = await searchGameByTitle(title);
+      return { title: title.toLowerCase(), igdbResult };
+    });
     const coverResults = await Promise.all(coverPromises);
     const igdbCoverMap = new Map(
       coverResults
@@ -226,30 +229,28 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
         .map(r => [r.title, r.igdbResult!]),
     );
 
-    // Only check deals for non-library games
-    const nonLibraryTitles = recommendedTitles.filter(t => !foundMap.has(t.toLowerCase()));
+    // Check deals on isthereanydeal
     const { checkDeals } = await import('../services/deals.service.js');
-    const deals = await checkDeals(nonLibraryTitles);
+    const deals = await checkDeals(recommendedTitles);
 
     const recommendations = recommendedTitles.map(title => {
       const key = title.toLowerCase();
-      const dbGame = foundMap.get(key);
       const igdbInfo = igdbCoverMap.get(key);
       const deal = deals.find(d => d.title.toLowerCase() === key);
 
       return {
         title,
-        inLibrary: dbGame ? true : false,
-        coverUrl: dbGame?.coverUrl ?? igdbInfo?.coverUrl ?? null,
-        genres: dbGame?.genres ?? igdbInfo?.genres ?? [],
-        platforms: dbGame?.platforms ?? [],
-        deal: (dbGame || !deal?.currentPrice) ? null : {
+        inLibrary: false,
+        coverUrl: igdbInfo?.coverUrl ?? null,
+        genres: igdbInfo?.genres ?? [],
+        platforms: [],
+        deal: deal?.currentPrice ? {
           currentPrice: deal.currentPrice,
           regularPrice: deal.regularPrice,
           discount: deal.discount,
           store: deal.store,
           url: deal.url,
-        },
+        } : null,
       };
     });
 

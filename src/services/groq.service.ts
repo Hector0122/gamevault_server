@@ -6,7 +6,7 @@ interface CompletedGame {
   rating: number | null;
 }
 
-export async function recommendGames(completedGames: CompletedGame[]): Promise<string[]> {
+export async function recommendGames(completedGames: CompletedGame[], excludeTitles: string[] = []): Promise<string[]> {
   if (!GROQ_API_KEY) {
     throw new Error('GROQ_API_KEY no configurada');
   }
@@ -15,11 +15,15 @@ export async function recommendGames(completedGames: CompletedGame[]): Promise<s
     .map(g => `${g.title}${g.genres.length ? ` (${g.genres.join(', ')})` : ''}${g.rating ? ` — rating: ${g.rating}/5` : ''}`)
     .join('\n');
 
+  const excludeList = excludeTitles.length > 0
+    ? `\nNO incluyas ninguno de estos juegos que ya tengo en mi biblioteca: ${excludeTitles.join(', ')}.`
+    : '';
+
   const prompt = `Basado en estos juegos que he completado y me gustaron:
 
 ${gamesList}
-
-Recomiéndame 8 juegos que probablemente disfrutaría. Los juegos deben ser conocidos y existir en IGDB.
+${excludeList}
+Recomiéndame 8 juegos que probablemente disfrutaría. Los juegos deben ser conocidos y existir en IGDB. No repitas ninguno de los juegos que ya tengo.
 Devuelve SOLO un array JSON de strings con los nombres de los juegos, nada más. Ejemplo: ["Game 1", "Game 2"]`;
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {

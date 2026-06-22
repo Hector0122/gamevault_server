@@ -228,6 +228,14 @@ export async function findGamesByTitles(titles: string[]) {
   return all.filter(g => lower.includes(g.title.toLowerCase()));
 }
 
+export async function getAllUserGameTitles(userId: string): Promise<string[]> {
+  const rows = await prisma.userGame.findMany({
+    where: { userId },
+    select: { game: { select: { title: true } } },
+  });
+  return rows.map(r => r.game.title);
+}
+
 export async function getCompletedGames(userId: string) {
   return prisma.userGame.findMany({
     where: { userId, status: 'COMPLETED' },
