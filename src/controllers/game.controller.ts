@@ -34,8 +34,18 @@ export async function addGame(req: AuthRequest, res: Response, next: NextFunctio
 
 export async function listGames(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const games = await gameService.getUserGames(req.userId!);
-    res.json(games);
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const search = req.query.search as string | undefined;
+    const status = req.query.status as any | undefined;
+    const platform = req.query.platform as string | undefined;
+    const genre = req.query.genre as string | undefined;
+    const sort = req.query.sort as any | undefined;
+
+    const result = await gameService.getUserGames(req.userId!, {
+      page, limit, search, status, platform, genre, sort,
+    });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -110,6 +120,122 @@ export async function getUserGameIds(req: AuthRequest, res: Response, next: Next
   try {
     const ids = await gameService.getUserGameExternalIds(req.userId!);
     res.json({ ids });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function exportGames(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const search = req.query.search as string | undefined;
+    const status = req.query.status as any | undefined;
+    const platform = req.query.platform as string | undefined;
+    const genre = req.query.genre as string | undefined;
+    const sort = req.query.sort as any | undefined;
+
+    const games = await gameService.exportUserGames(req.userId!, {
+      search, status, platform, genre, sort,
+    });
+
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Biblioteca');
+
+    sheet.columns = [
+      { header: 'Título', key: 'title', width: 40 },
+      { header: 'Estado', key: 'status', width: 14 },
+      { header: 'Rating', key: 'rating', width: 8 },
+      { header: 'Horas', key: 'hours', width: 8 },
+      { header: 'Notas', key: 'notes', width: 30 },
+      { header: 'Plataformas', key: 'platforms', width: 30 },
+      { header: 'Géneros', key: 'genres', width: 30 },
+      { header: 'Año', key: 'year', width: 8 },
+    ];
+
+    const statusLabels: Record<string, string> = {
+      WISHLIST: 'Deseado', OWNED: 'Comprado', PLAYING: 'Jugando',
+      COMPLETED: 'Completado', DROPPED: 'Abandonado',
+    };
+
+    for (const ug of games) {
+      sheet.addRow({
+        title: ug.game.title,
+        status: statusLabels[ug.status] ?? ug.status,
+        rating: ug.rating ?? '',
+        hours: ug.hoursPlayed ?? '',
+        notes: ug.notes ?? '',
+        platforms: ug.game.platforms.join(', '),
+        genres: ug.game.genres.join(', '),
+        year: ug.game.releaseDate ? new Date(ug.game.releaseDate).getFullYear() : '',
+      });
+    }
+
+    sheet.getRow(1).font = { bold: true };
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const fileName = `biblioteca_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getDeals(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const completed = await gameService.getCompletedGames(req.userId!);
+
+    if (completed.length === 0) {
+      res.json({ recommendations: [], message: 'Completa al menos un juego para recibir recomendaciones' });
+      return;
+    }
+
+    const completedGames = completed.map(ug => ({
+      title: ug.game.title,
+      genres: ug.game.genres,
+      rating: ug.rating,
+    }));
+
+    // Get recommendations from Groq
+    const { recommendGames } = await import('../services/groq.service.js');
+    const recommendedTitles = await recommendGames(completedGames);
+
+    if (recommendedTitles.length === 0) {
+      res.json({ recommendations: [], message: 'No se pudieron generar recomendaciones' });
+      return;
+    }
+
+    // Find those games in local DB
+    const dbGames = await gameService.findGamesByTitles(recommendedTitles);
+    const foundMap = new Map(dbGames.map(g => [g.title.toLowerCase(), g]));
+
+    // Check deals on isthereanydeal
+    const { checkDeals } = await import('../services/deals.service.js');
+    const deals = await checkDeals(recommendedTitles);
+
+    const recommendations = recommendedTitles.map(title => {
+      const dbGame = foundMap.get(title.toLowerCase());
+      const deal = deals.find(d => d.title.toLowerCase() === title.toLowerCase());
+
+      return {
+        title,
+        inLibrary: dbGame ? true : false,
+        coverUrl: dbGame?.coverUrl ?? null,
+        genres: dbGame?.genres ?? [],
+        platforms: dbGame?.platforms ?? [],
+        deal: deal?.currentPrice != null ? {
+          currentPrice: deal.currentPrice,
+          regularPrice: deal.regularPrice,
+          discount: deal.discount,
+          store: deal.store,
+          url: deal.url,
+        } : null,
+      };
+    });
+
+    res.json({ recommendations });
   } catch (err) {
     next(err);
   }

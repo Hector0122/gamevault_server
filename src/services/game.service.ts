@@ -42,12 +42,75 @@ export async function addGameToCollection(externalId: number) {
   });
 }
 
-export async function getUserGames(userId: string) {
-  return prisma.userGame.findMany({
-    where: { userId },
-    include: { game: true },
-    orderBy: { updatedAt: 'desc' },
-  });
+export async function getUserGames(
+  userId: string,
+  options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: GameStatus;
+    platform?: string;
+    genre?: string;
+    sort?: 'recent' | 'title' | 'hours' | 'rating';
+  },
+) {
+  const page = options?.page ?? 1;
+  const limit = options?.limit ?? 50;
+  const skip = (page - 1) * limit;
+
+  const where: any = { userId };
+
+  if (options?.status) {
+    where.status = options.status;
+  }
+
+  if (options?.search) {
+    where.game = {
+      title: { contains: options.search, mode: 'insensitive' },
+    };
+  }
+
+  if (options?.platform) {
+    where.game = {
+      ...(where.game ?? {}),
+      platforms: { has: options.platform },
+    };
+  }
+
+  if (options?.genre) {
+    where.game = {
+      ...(where.game ?? {}),
+      genres: { has: options.genre },
+    };
+  }
+
+  let orderBy: any = { updatedAt: 'desc' };
+  switch (options?.sort) {
+    case 'title':
+      orderBy = { game: { title: 'asc' } };
+      break;
+    case 'hours':
+      orderBy = { hoursPlayed: 'desc' };
+      break;
+    case 'rating':
+      orderBy = { rating: 'desc' };
+      break;
+    default:
+      orderBy = { updatedAt: 'desc' };
+  }
+
+  const [games, total] = await Promise.all([
+    prisma.userGame.findMany({
+      where,
+      include: { game: true },
+      orderBy,
+      skip,
+      take: limit,
+    }),
+    prisma.userGame.count({ where }),
+  ]);
+
+  return { games, total, page, limit };
 }
 
 export async function updateGameStatus(userId: string, gameId: string, status: GameStatus) {
@@ -119,6 +182,58 @@ export async function getDashboard(userId: string) {
   );
 
   return { total, ...stats, estimatedHoursRemaining: Math.round(estimatedHoursRemaining / 60 * 10) / 10 };
+}
+
+export async function exportUserGames(
+  userId: string,
+  options?: {
+    search?: string;
+    status?: GameStatus;
+    platform?: string;
+    genre?: string;
+    sort?: 'recent' | 'title' | 'hours' | 'rating';
+  },
+) {
+  const where: any = { userId };
+
+  if (options?.status) where.status = options.status;
+  if (options?.search) {
+    where.game = { title: { contains: options.search, mode: 'insensitive' } };
+  }
+  if (options?.platform) {
+    where.game = { ...(where.game ?? {}), platforms: { has: options.platform } };
+  }
+  if (options?.genre) {
+    where.game = { ...(where.game ?? {}), genres: { has: options.genre } };
+  }
+
+  let orderBy: any = { updatedAt: 'desc' };
+  switch (options?.sort) {
+    case 'title': orderBy = { game: { title: 'asc' } }; break;
+    case 'hours': orderBy = { hoursPlayed: 'desc' }; break;
+    case 'rating': orderBy = { rating: 'desc' }; break;
+  }
+
+  return prisma.userGame.findMany({
+    where,
+    include: { game: true },
+    orderBy,
+  });
+}
+
+export async function findGamesByTitles(titles: string[]) {
+  if (titles.length === 0) return [];
+  const lower = titles.map(t => t.toLowerCase());
+  const all = await prisma.game.findMany();
+  return all.filter(g => lower.includes(g.title.toLowerCase()));
+}
+
+export async function getCompletedGames(userId: string) {
+  return prisma.userGame.findMany({
+    where: { userId, status: 'COMPLETED' },
+    include: { game: { select: { title: true, genres: true } } },
+    orderBy: { updatedAt: 'desc' },
+  });
 }
 
 export async function getUserGameExternalIds(userId: string) {
