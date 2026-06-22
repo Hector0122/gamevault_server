@@ -200,10 +200,11 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
 
     // Get all user's library titles to exclude from recommendations
     const allTitles = await gameService.getAllUserGameTitles(req.userId!);
+    const recentTitles = allTitles.slice(-50); // Limit prompt size
 
     // Get recommendations from Groq (excluding owned games by exact title)
     const { recommendGames } = await import('../services/groq.service.js');
-    let recommendedTitles = await recommendGames(completedGames, allTitles);
+    let recommendedTitles = await recommendGames(completedGames, recentTitles);
 
     // Filter with fuzzy matching: remove games similar to any owned game
     const { isSimilarTitle } = await import('../services/deals.service.js');

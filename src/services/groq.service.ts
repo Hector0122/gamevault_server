@@ -6,25 +6,73 @@ interface CompletedGame {
   rating: number | null;
 }
 
+function analyzeGenres(games: CompletedGame[]): { genre: string; score: number }[] {
+  const genreScores = new Map<string, number>();
+  for (const g of games) {
+    const weight = g.rating ? g.rating : 3;
+    for (const genre of g.genres) {
+      genreScores.set(genre, (genreScores.get(genre) ?? 0) + weight);
+    }
+  }
+  return Array.from(genreScores.entries())
+    .map(([genre, score]) => ({ genre, score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+}
+
 export async function recommendGames(completedGames: CompletedGame[], excludeTitles: string[] = []): Promise<string[]> {
   if (!GROQ_API_KEY) {
     throw new Error('GROQ_API_KEY no configurada');
   }
 
-  const gamesList = completedGames
-    .map(g => `${g.title}${g.genres.length ? ` (${g.genres.join(', ')})` : ''}${g.rating ? ` — rating: ${g.rating}/5` : ''}`)
+  // Filter to only well-rated games (rating >= 3 or no rating)
+  const goodGames = completedGames
+    .filter(g => g.rating == null || g.rating >= 3)
+    .sort((a, b) => {
+      // Sort by rating desc, then by title
+      const ra = a.rating ?? 3;
+      const rb = b.rating ?? 3;
+      return rb - ra;
+    })
+    .slice(0, 20); // Top 20 best-rated games
+
+  if (goodGames.length === 0) {
+    return [];
+  }
+
+  const topGenres = analyzeGenres(goodGames);
+  const genreSummary = topGenres.map(g => `${g.genre} (${Math.round(g.score)} pts)`).join(', ');
+
+  const gamesList = goodGames
+    .map(g => {
+      const parts: string[] = [g.title];
+      if (g.genres.length) parts.push(`[${g.genres.join(', ')}]`);
+      if (g.rating) parts.push(`★${g.rating}/5`);
+      return parts.join(' ');
+    })
     .join('\n');
 
   const excludeList = excludeTitles.length > 0
-    ? `\nNO incluyas ninguno de estos juegos que ya tengo en mi biblioteca: ${excludeTitles.join(', ')}.`
+    ? `\nJUEGOS QUE YA TENGO (nunca recomendar estos ni sus versiones/ediciones):\n${excludeTitles.slice(0, 50).join(', ')}`
     : '';
 
-  const prompt = `Basado en estos juegos que he completado y me gustaron:
+  const prompt = `Eres un experto en videojuegos. Analiza mis gustos basado en estos juegos que he completado y disfrutado:
 
 ${gamesList}
 ${excludeList}
-Recomiéndame 8 juegos que probablemente disfrutaría. Los juegos deben ser conocidos y existir en IGDB. No repitas ninguno de los juegos que ya tengo.
-Devuelve SOLO un array JSON de strings con los nombres de los juegos, nada más. Ejemplo: ["Game 1", "Game 2"]`;
+
+MIS GÉNEROS PREFERIDOS (ordenados por importancia): ${genreSummary}
+
+Basado en esto, recomiéndame EXACTAMENTE 8 juegos que:
+1. Sean del mismo estilo/género que mis favoritos pero NO sean los obvios que todo el mundo conoce
+2. Tengan buena crítica (Metacritic 80+ o Very Positive en Steam)
+3. Sean de 2015 en adelante (no retro)
+4. Sean una mezcla: 4 muy conocidos y 4 "hidden gems" menos mainstream pero igual de buenos
+5. NO sean secuelas de juegos que ya tengo
+6. Incluyan variedad: no todos del mismo género
+7. Sean juegos que realmente valgan la pena jugar, no relleno
+
+Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 2", ...]`;
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -35,7 +83,7 @@ Devuelve SOLO un array JSON de strings con los nombres de los juegos, nada más.
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
+      temperature: 0.85,
       max_tokens: 1024,
     }),
   });
