@@ -1,9 +1,8 @@
 const API_KEY = process.env.ISTHEREANYDEAL_API_KEY ?? '';
-const BASE = 'https://api.isthereanydeal.com/v01';
 
 export interface DealInfo {
   title: string;
-  plain: string | null;
+  gameId: string | null;
   currentPrice: number | null;
   regularPrice: number | null;
   discount: number | null;
@@ -11,62 +10,74 @@ export interface DealInfo {
   url: string | null;
 }
 
+interface ITADGameSearchResult {
+  id: string;
+  title: string;
+  slug: string;
+}
+
+interface ITADPriceDeal {
+  shop: { name: string };
+  price: { amount: number };
+  regular: { amount: number };
+  cut: number;
+  url: string;
+}
+
+interface ITADPriceResult {
+  id: string;
+  deals: ITADPriceDeal[];
+}
+
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function getPlain(title: string): Promise<string | null> {
-  const url = `${BASE}/game/plain/?key=${API_KEY}&shop=us&title=${encodeURIComponent(title)}`;
+async function itadFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'ITAD-API-Key': API_KEY,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...(options?.headers ?? {}),
+      },
+    });
     if (!res.ok) {
-      console.warn(`ITAD plain lookup failed for "${title}": ${res.status}`);
+      console.warn(`ITAD error ${res.status}:`, await res.text().catch(() => ''));
       return null;
     }
-    const data = await res.json() as any;
-    return data?.data?.[title]?.plain ?? data?.plain ?? null;
+    return res.json() as Promise<T>;
   } catch (err) {
-    console.warn(`ITAD plain lookup error for "${title}":`, err);
+    console.warn('ITAD fetch error:', err);
     return null;
   }
 }
 
-interface ITADPriceEntry {
-  price_new: number;
-  price_old: number;
-  price_cut: number;
-  shop: { name: string } | string;
-  url: string;
+async function searchGame(title: string): Promise<ITADGameSearchResult | null> {
+  const data = await itadFetch<ITADGameSearchResult[]>(
+    `https://api.isthereanydeal.com/games/search/v1?title=${encodeURIComponent(title)}`
+  );
+  if (!data || data.length === 0) return null;
+
+  // Try exact match first
+  const exact = data.find(g => g.title.toLowerCase() === title.toLowerCase());
+  return exact ?? data[0];
 }
 
-async function getPrices(plains: string[]): Promise<Map<string, ITADPriceEntry | null>> {
-  const url = `${BASE}/game/prices/?key=${API_KEY}&plains=${plains.join(',')}`;
-  const result = new Map<string, ITADPriceEntry | null>();
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.warn(`ITAD prices lookup failed: ${res.status}`);
-      return result;
+async function getPrices(gameIds: string[]): Promise<Map<string, ITADPriceResult>> {
+  const data = await itadFetch<ITADPriceResult[]>(
+    'https://api.isthereanydeal.com/games/prices/v2',
+    {
+      method: 'POST',
+      body: JSON.stringify(gameIds),
     }
-    const data = await res.json() as any;
-    // v01 format: { data: { plain_id: { list: [...] } } }
-    const priceData = data?.data ?? data;
-    if (!priceData || typeof priceData !== 'object') {
-      console.warn('ITAD prices unexpected format:', JSON.stringify(data).slice(0, 200));
-      return result;
-    }
-    for (const plain of plains) {
-      const entry = priceData[plain];
-      const list: ITADPriceEntry[] = entry?.list ?? entry?.prices ?? [];
-      if (list.length > 0) {
-        const best = list.reduce((min, p) => p.price_new < min.price_new ? p : min, list[0]);
-        result.set(plain, best);
-      } else {
-        result.set(plain, null);
-      }
-    }
-  } catch (err) {
-    console.warn('ITAD prices error:', err);
+  );
+  const result = new Map<string, ITADPriceResult>();
+  if (!data) return result;
+  for (const entry of data) {
+    result.set(entry.id, entry);
   }
   return result;
 }
@@ -76,21 +87,20 @@ export async function checkDeals(titles: string[]): Promise<DealInfo[]> {
     throw new Error('ISTHEREANYDEAL_API_KEY no configurada');
   }
 
-  // Get plain IDs with rate limiting
-  const plainResults: { title: string; plain: string | null }[] = [];
+  // Step 1: Search each game to get ITAD game IDs
+  const searchResults: { title: string; gameId: string | null }[] = [];
   for (const title of titles) {
-    const plain = await getPlain(title);
-    plainResults.push({ title, plain });
-    await sleep(250);
+    const result = await searchGame(title);
+    searchResults.push({ title, gameId: result?.id ?? null });
+    await sleep(300); // conservative rate limit
   }
 
-  const validPlains = plainResults
-    .filter((r): r is { title: string; plain: string } => r.plain !== null);
+  const validEntries = searchResults.filter((r): r is { title: string; gameId: string } => r.gameId !== null);
 
-  if (validPlains.length === 0) {
-    return plainResults.map(r => ({
+  if (validEntries.length === 0) {
+    return searchResults.map(r => ({
       title: r.title,
-      plain: null,
+      gameId: null,
       currentPrice: null,
       regularPrice: null,
       discount: null,
@@ -99,19 +109,22 @@ export async function checkDeals(titles: string[]): Promise<DealInfo[]> {
     }));
   }
 
-  const priceMap = await getPrices(validPlains.map(r => r.plain));
+  // Step 2: Get prices for all found games (bulk call)
+  const priceMap = await getPrices(validEntries.map(e => e.gameId));
 
-  return plainResults.map(r => {
-    const bestDeal = r.plain ? priceMap.get(r.plain) ?? null : null;
-    const storeName = bestDeal && typeof bestDeal.shop === 'object' ? bestDeal.shop.name : (bestDeal?.shop as string) ?? null;
+  return searchResults.map(r => {
+    const entry = r.gameId ? priceMap.get(r.gameId) : undefined;
+    const bestDeal = entry?.deals?.length
+      ? entry.deals.reduce((min, d) => d.price.amount < min.price.amount ? d : min, entry.deals[0])
+      : null;
 
     return {
       title: r.title,
-      plain: r.plain,
-      currentPrice: bestDeal?.price_new ?? null,
-      regularPrice: bestDeal?.price_old ?? null,
-      discount: bestDeal?.price_cut ?? null,
-      store: storeName,
+      gameId: r.gameId,
+      currentPrice: bestDeal?.price?.amount ?? null,
+      regularPrice: bestDeal?.regular?.amount ?? null,
+      discount: bestDeal?.cut ?? null,
+      store: bestDeal?.shop?.name ?? null,
       url: bestDeal?.url ?? null,
     };
   });
@@ -128,11 +141,9 @@ const EDITION_SUFFIXES = [
 
 function normalizeForCompare(title: string): string {
   let normalized = title.toLowerCase().trim();
-  // Remove edition suffixes
   for (const pattern of EDITION_SUFFIXES) {
     normalized = normalized.replace(pattern, '');
   }
-  // Remove trailing punctuation
   normalized = normalized.replace(/[\s:;,-]+$/, '').trim();
   return normalized;
 }
@@ -144,12 +155,11 @@ export function isSimilarTitle(titleA: string, titleB: string): boolean {
   if (a === b) return true;
   if (a.includes(b) || b.includes(a)) return true;
 
-  // Word overlap: if they share >70% of words in common
   const wordsA = new Set(a.split(/\s+/));
   const wordsB = new Set(b.split(/\s+/));
   const intersection = [...wordsA].filter(w => wordsB.has(w));
   const union = new Set([...wordsA, ...wordsB]);
   const overlap = intersection.length / union.size;
 
-  return overlap >= 0.6; // 60% word overlap threshold
+  return overlap >= 0.6;
 }
