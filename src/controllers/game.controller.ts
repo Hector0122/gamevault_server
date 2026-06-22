@@ -211,27 +211,45 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
     const dbGames = await gameService.findGamesByTitles(recommendedTitles);
     const foundMap = new Map(dbGames.map(g => [g.title.toLowerCase(), g]));
 
-    // Check deals on isthereanydeal
+    // Search IGDB for covers of games not in library
+    const { searchGameByTitle } = await import('../services/igdb.js');
+    const coverPromises = recommendedTitles
+      .filter(t => !foundMap.has(t.toLowerCase()))
+      .map(async (title) => {
+        const igdbResult = await searchGameByTitle(title);
+        return { title: title.toLowerCase(), igdbResult };
+      });
+    const coverResults = await Promise.all(coverPromises);
+    const igdbCoverMap = new Map(
+      coverResults
+        .filter(r => r.igdbResult)
+        .map(r => [r.title, r.igdbResult!]),
+    );
+
+    // Only check deals for non-library games
+    const nonLibraryTitles = recommendedTitles.filter(t => !foundMap.has(t.toLowerCase()));
     const { checkDeals } = await import('../services/deals.service.js');
-    const deals = await checkDeals(recommendedTitles);
+    const deals = await checkDeals(nonLibraryTitles);
 
     const recommendations = recommendedTitles.map(title => {
-      const dbGame = foundMap.get(title.toLowerCase());
-      const deal = deals.find(d => d.title.toLowerCase() === title.toLowerCase());
+      const key = title.toLowerCase();
+      const dbGame = foundMap.get(key);
+      const igdbInfo = igdbCoverMap.get(key);
+      const deal = deals.find(d => d.title.toLowerCase() === key);
 
       return {
         title,
         inLibrary: dbGame ? true : false,
-        coverUrl: dbGame?.coverUrl ?? null,
-        genres: dbGame?.genres ?? [],
+        coverUrl: dbGame?.coverUrl ?? igdbInfo?.coverUrl ?? null,
+        genres: dbGame?.genres ?? igdbInfo?.genres ?? [],
         platforms: dbGame?.platforms ?? [],
-        deal: deal?.currentPrice != null ? {
+        deal: (dbGame || !deal?.currentPrice) ? null : {
           currentPrice: deal.currentPrice,
           regularPrice: deal.regularPrice,
           discount: deal.discount,
           store: deal.store,
           url: deal.url,
-        } : null,
+        },
       };
     });
 

@@ -74,6 +74,29 @@ export async function searchGames(query: string, offset = 0): Promise<IGDBGame[]
   }));
 }
 
+export async function searchGameByTitle(title: string): Promise<{ coverUrl: string | null; genres: string[] } | null> {
+  try {
+    const games = await igdbFetch<IGDBGame[]>('games', `
+      search "${title}";
+      fields name,cover.url,genres.name;
+      limit 5;
+    `);
+
+    const exact = games.find(g => g.name.toLowerCase() === title.toLowerCase());
+    const best = exact ?? games[0];
+    if (!best) return null;
+
+    return {
+      coverUrl: best.cover?.url
+        ? `https:${best.cover.url.replace('t_thumb', 't_cover_big')}`
+        : null,
+      genres: best.genres?.map(g => g.name) ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getGameById(id: number): Promise<IGDBGame | null> {
   const [game, ttb] = await Promise.all([
     igdbFetch<IGDBGame[]>('games', `

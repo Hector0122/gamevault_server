@@ -19,7 +19,7 @@ export async function recommendGames(completedGames: CompletedGame[]): Promise<s
 
 ${gamesList}
 
-Recomiéndame 15 juegos que probablemente disfrutaría. Los juegos deben ser conocidos y existir en IGDB.
+Recomiéndame 8 juegos que probablemente disfrutaría. Los juegos deben ser conocidos y existir en IGDB.
 Devuelve SOLO un array JSON de strings con los nombres de los juegos, nada más. Ejemplo: ["Game 1", "Game 2"]`;
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -53,7 +53,7 @@ Devuelve SOLO un array JSON de strings con los nombres de los juegos, nada más.
 
   try {
     const titles: string[] = JSON.parse(jsonMatch[0]);
-    return titles.slice(0, 15);
+    return titles.slice(0, 10);
   } catch {
     console.warn('Failed to parse Groq response as JSON:', content);
     return [];
