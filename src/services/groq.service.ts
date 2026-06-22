@@ -20,7 +20,7 @@ function analyzeGenres(games: CompletedGame[]): { genre: string; score: number }
     .slice(0, 5);
 }
 
-export async function recommendGames(completedGames: CompletedGame[], excludeTitles: string[] = []): Promise<string[]> {
+export async function recommendGames(completedGames: CompletedGame[], excludeTitles: string[] = [], wishlistGenres: string[] = []): Promise<string[]> {
   if (!GROQ_API_KEY) {
     throw new Error('GROQ_API_KEY no configurada');
   }
@@ -56,10 +56,15 @@ export async function recommendGames(completedGames: CompletedGame[], excludeTit
     ? `\nJUEGOS QUE YA TENGO (nunca recomendar estos ni sus versiones/ediciones):\n${excludeTitles.slice(0, 50).join(', ')}`
     : '';
 
+  const wishlistPart = wishlistGenres.length > 0
+    ? `\n\nADEMÁS, me interesan especialmente estos géneros (de mi lista de deseos): ${[...new Set(wishlistGenres)].join(', ')}`
+    : '';
+
   const prompt = `Eres un experto en videojuegos. Analiza mis gustos basado en estos juegos que he completado y disfrutado:
 
 ${gamesList}
 ${excludeList}
+${wishlistPart}
 
 MIS GÉNEROS PREFERIDOS (ordenados por importancia): ${genreSummary}
 

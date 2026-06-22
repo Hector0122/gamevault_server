@@ -218,9 +218,13 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
     const allTitles = await gameService.getAllUserGameTitles(req.userId!);
     const recentTitles = allTitles.slice(-50); // Limit prompt size
 
+    // Get wishlist genres to influence recommendations
+    const wishlistGames = await gameService.getWishlistGames(req.userId!);
+    const wishlistGenres = [...new Set(wishlistGames.flatMap(ug => ug.game.genres))];
+
     // Get recommendations from Groq (excluding owned games by exact title)
     const { recommendGames } = await import('../services/groq.service.js');
-    let recommendedTitles = await recommendGames(completedGames, recentTitles);
+    let recommendedTitles = await recommendGames(completedGames, recentTitles, wishlistGenres);
 
     // Filter with fuzzy matching: remove games similar to any owned game
     const { isSimilarTitle } = await import('../services/deals.service.js');
