@@ -15,6 +15,7 @@ App Android nativa + backend Express para gestionar colección de videojuegos, s
 - Node.js, Express, TypeScript
 - Prisma ORM + PostgreSQL
 - Railway (deploy, hosting, DB)
+- **exceljs** (exportar a Excel)
 
 ### Frontend
 - React Native 0.86 (bare workflow, Android focus)
@@ -22,10 +23,13 @@ App Android nativa + backend Express para gestionar colección de videojuegos, s
 - @react-navigation/bottom-tabs + native-stack
 - Pnpm
 - react-native-safe-area-context
+- **react-native-toast-message** (toast notifications)
 
-### API Externa
-- IGDB v4 (búsqueda, portadas, duración)
+### APIs Externas
+- **IGDB v4** (búsqueda, portadas, duración)
   - Duración desde endpoint separado `game_time_to_beats`
+- **isthereanydeal.com v03** (precios y ofertas de juegos)
+- **Groq AI** (recomendaciones personalizadas via LLaMA 70B)
 
 ---
 
@@ -35,10 +39,10 @@ App Android nativa + backend Express para gestionar colección de videojuegos, s
 
 ```
 src/
-  controllers/  # game.controller.ts
-  services/     # game.service.ts, igdb.ts
-  routes/       # game.routes.ts
-  middleware/   # error.ts
+  controllers/  # game.controller.ts, auth.controller.ts
+  services/     # game.service.ts, igdb.ts, groq.service.ts, deals.service.ts
+  routes/       # game.routes.ts, auth.routes.ts
+  middleware/   # auth.ts, error.ts
   types/        # index.ts
 prisma/
   schema.prisma
@@ -49,12 +53,12 @@ prisma/
 
 ```
 src/
-  types/        # Interfaces (Game, UserGame, etc.)
+  types/        # Interfaces (Game, UserGame, DealRecommendation, etc.)
   services/     # api.ts
-  hooks/        # useSearch, useLibrary, useDashboard
-  components/   # GameCard, StatusBadge
-  screens/      # DashboardScreen, SearchScreen, LibraryScreen, GameDetailScreen
-  navigation/   # AppNavigator (tabs + stack)
+  hooks/        # useSearch, useLibrary, useDashboard, useDeals
+  components/   # GameCard, StatusBadge, StatusSelectorModal
+  screens/      # DashboardScreen, SearchScreen, LibraryScreen, GameDetailScreen, DealsScreen
+  navigation/   # AppNavigator (tabs + LibraryStack + SearchStack)
 ```
 
 ---
@@ -65,16 +69,21 @@ src/
 |--------|------|-------------|
 | GET | `/api/search?q=&offset=` | Buscar juegos en IGDB (paginado) |
 | POST | `/api/games` | Agregar juego a colección |
-| GET | `/api/games` | Listar biblioteca del usuario |
+| GET | `/api/games` | Listar biblioteca (paginado + filtros server-side) |
 | GET | `/api/games/ids` | IDs externos de juegos en biblioteca |
 | PATCH | `/api/games/:id/status` | Cambiar estado |
 | PATCH | `/api/games/:id/hours` | Actualizar horas jugadas |
 | PATCH | `/api/games/:id/notes` | Actualizar notas y rating |
 | DELETE | `/api/games/:id` | Eliminar juego de biblioteca |
 | GET | `/api/dashboard` | Estadísticas + horas restantes estimadas |
+| GET | `/api/deals` | Recomendaciones + ofertas (Groq + isthereanydeal) |
+| GET | `/api/export` | Exportar biblioteca a Excel (.xlsx) con filtros |
 | GET | `/api/image-proxy?url=` | Proxy de imágenes para Android |
 | POST | `/api/auth/register` | Registrar usuario |
 | POST | `/api/auth/login` | Iniciar sesión (JWT) |
+
+### Filtros de biblioteca (server-side)
+`GET /api/games?page=1&limit=50&search=&status=&platform=&genre=&sort=recent|title|hours|rating`
 
 ---
 
@@ -112,6 +121,58 @@ src/
 
 ---
 
+## Variables de Entorno
+
+```bash
+DATABASE_URL="postgresql://..."
+PORT=3001
+IGDB_CLIENT_ID="xxx"
+IGDB_CLIENT_SECRET="xxx"
+ISTHEREANYDEAL_API_KEY="xxx"    # API v03 (no v01)
+GROQ_API_KEY="xxx"               # Para recomendaciones AI
+JWT_SECRET="gamevault-dev-secret"
+```
+
+---
+
+## Servicios Principales
+
+### game.service.ts
+- `getUserGames(userId, options)` — Paginación + filtros server-side
+- `exportUserGames(userId, options)` — Genera Excel con filtros
+- `getCompletedGames(userId)` — Juegos con status COMPLETED
+- `getAllUserGameTitles(userId)` — Todos los títulos de la biblioteca
+- `findGamesByTitles(titles)` — Busca juegos por título (case-insensitive)
+
+### groq.service.ts
+- `recommendGames(completedGames, excludeTitles)` — Pide recomendaciones a Groq AI
+  - Prompt: analiza géneros preferidos, pide 8 juegos (mezcla conocidos + hidden gems)
+  - Modelo: `llama-3.3-70b-versatile`
+  - Temperature: 0.85
+
+### deals.service.ts
+- `checkDeals(titles)` — Consulta precios en isthereanydeal v03
+  - Paso 1: `GET /games/search/v1?title=` → obtiene game ID
+  - Paso 2: `POST /games/prices/v2` (array de IDs) → precios actuales
+  - Devuelve: precio actual, precio normal, descuento %, tienda, URL
+- `isSimilarTitle(a, b)` — Matching difuso: remueve sufijos de edición (GOTY, Definitive, etc.) y compara word overlap 60%+
+
+### igdb.ts
+- `searchGames(query, offset)` — Búsqueda paginada con covers + time_to_beat
+- `getGameById(id)` — Juego por IGDB ID
+- `searchGameByTitle(title)` — Búsqueda por título para obtener cover (usado en deals)
+
+---
+
+## Middleware
+
+### auth.ts
+- Verifica `Authorization: Bearer <token>` header
+- También acepta `?token=` query param para descargas directas (export Excel)
+- Attaches `req.userId`
+
+---
+
 ## Setup
 
 ### IGDB - Obtener credenciales
@@ -123,6 +184,26 @@ src/
 5. Setear en Railway:
    ```bash
    railway variables set IGDB_CLIENT_ID=xxx IGDB_CLIENT_SECRET=xxx
+   ```
+
+### isthereanydeal - API Key
+
+1. Crear cuenta en https://isthereanydeal.com/
+2. Ir a App Setup / API
+3. Generar API key
+4. Setear en Railway:
+   ```bash
+   railway variables set ISTHEREANYDEAL_API_KEY=xxx
+   ```
+   > Nota: usamos la API **v03** (no v01). Auth via header `ITAD-API-Key`.
+
+### Groq - API Key
+
+1. Crear cuenta en https://console.groq.com/
+2. Generar API key
+3. Setear en Railway:
+   ```bash
+   railway variables set GROQ_API_KEY=xxx
    ```
 
 ### Railway - Deploy del Backend
@@ -149,7 +230,7 @@ Start command (`railway.json`): `prisma migrate deploy && node dist/index.js`
 # Backend
 cd gamevault_server
 pnpm install
-cp .env.example .env   # Editar con DB local + IGDB
+cp .env.example .env   # Editar con DB local + IGDB + ITAD + Groq
 pnpm prisma migrate dev --name init
 pnpm dev     # → localhost:3001
 
@@ -170,26 +251,21 @@ La API apunta a:
 ### Implementado
 - [x] Backend en Railway con Express + Prisma + PostgreSQL
 - [x] Búsqueda IGDB con paginación (offset, 20 por página)
+- [x] Paginación server-side en biblioteca (limit 50 + filtros)
 - [x] CRUD juegos y estados
 - [x] Dashboard de estadísticas con backlog (horas restantes estimadas)
 - [x] Autenticación JWT (registro/login con email y contraseña)
 - [x] Duración estimada desde IGDB (rápido / normal / completista)
 - [x] Horas jugadas, notas y rating (edición inline desde biblioteca)
 - [x] Proxy de imágenes (Android no carga CloudFront directo)
-- [x] Grid 3 columnas en resultados de búsqueda
-- [x] Safe area insets
-- [x] Biblioteca con filtros colapsables (estado, plataforma, género) y ordenamiento (reciente, A-Z, horas, rating)
-- [x] Pull-to-refresh en biblioteca y dashboard
-- [x] Badge "En colección ✓" en resultados de búsqueda y detalle
-- [x] Pantalla de detalle con selector de estado
-- [x] Perfil 👤 en header navega al Dashboard (con cerrar sesión)
-- [x] MMKV para persistencia local (token + datos de sesión)
+- [x] Exportar a Excel (.xlsx) con filtros
+- [x] Recomendaciones AI vía Groq + ofertas vía isthereanydeal v03
+- [x] Auth middleware acepta token via query param para descargas
 
 ### Pendiente / Planificado
 - Sincronización Steam (importar biblioteca automáticamente)
 - Colecciones por plataforma/género (vista agrupada)
 - Backlog inteligente mejorado (tiempo restante ponderado por prioridad)
-
 
 ---
 
@@ -199,6 +275,9 @@ La API apunta a:
 - **Imágenes**: Fresco (image loader de RN en Android) no carga URLs directas del CDN de IGDB (CloudFront). Solución: proxy en backend (`/api/image-proxy`) que fetchea y retorna la imagen con Content-Type correcto.
 - **Duración**: IGDB v4 tiene `time_to_beat` en un endpoint separado `game_time_to_beats`. Se consulta en batch tras la búsqueda y se mergea con los resultados. Los valores vienen en segundos; se almacenan en minutos.
 - **Railway**: usa pnpm v9 + Nixpacks. El build ejecuta `prisma generate` vía `postinstall` y `prisma generate && tsc` en el build script. Railway usa `--frozen-lockfile`.
+- **Paginación biblioteca**: Server-side con filtros (search, status, platform, genre, sort). Frontend usa FlatList con `onEndReached` e infinite scroll. Los filtros/sort se envían como query params.
+- **isthereanydeal API v03**: La v01 está deprecada. La v03 usa header `ITAD-API-Key` y endpoints `/games/search/v1` + `/games/prices/v2`.
+- **Groq recomendaciones**: El prompt analiza los géneros preferidos ponderados por rating, pide mezcla de conocidos + hidden gems, y filtra manualmente con fuzzy matching para evitar duplicados por edición (GOTY, Definitive, etc.).
 
 ---
 
@@ -228,7 +307,7 @@ La API apunta a:
 - URL: https://gamevaultserver-production.up.railway.app
 - PostgreSQL vinculado automáticamente
 - Migraciones: `prisma migrate deploy` al arrancar
-- Variables: `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET`
+- Variables: `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET`, `ISTHEREANYDEAL_API_KEY`, `GROQ_API_KEY`
 
 ---
 
