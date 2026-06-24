@@ -76,15 +76,36 @@ export async function searchGames(query: string, offset = 0): Promise<IGDBGame[]
 
 export async function searchGameByTitle(title: string): Promise<{ coverUrl: string | null; genres: string[] } | null> {
   try {
-    const games = await igdbFetch<IGDBGame[]>('games', `
-      search "${title}";
-      fields name,cover.url,genres.name;
-      limit 5;
-    `);
+    const searchTitle = async (q: string) => {
+      const games = await igdbFetch<IGDBGame[]>('games', `
+        search "${q}";
+        fields name,cover.url,genres.name;
+        limit 10;
+      `);
+      return games;
+    };
+
+    let games = await searchTitle(title);
 
     const exact = games.find(g => g.name.toLowerCase() === title.toLowerCase());
     const best = exact ?? games[0];
-    if (!best) return null;
+
+    if (!best) {
+      const words = title.split(/\s+/).filter(w => w.length > 2);
+      if (words.length > 1) {
+        games = await searchTitle(words.slice(0, 3).join(' '));
+        const bestAlt = games[0];
+        if (bestAlt) {
+          return {
+            coverUrl: bestAlt.cover?.url
+              ? `https:${bestAlt.cover.url.replace('t_thumb', 't_cover_big')}`
+              : null,
+            genres: bestAlt.genres?.map(g => g.name) ?? [],
+          };
+        }
+      }
+      return null;
+    }
 
     return {
       coverUrl: best.cover?.url
