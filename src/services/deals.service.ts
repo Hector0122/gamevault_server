@@ -87,13 +87,14 @@ export async function checkDeals(titles: string[]): Promise<DealInfo[]> {
     throw new Error('ISTHEREANYDEAL_API_KEY no configurada');
   }
 
-  // Step 1: Search each game to get ITAD game IDs
-  const searchResults: { title: string; gameId: string | null }[] = [];
-  for (const title of titles) {
-    const result = await searchGame(title);
-    searchResults.push({ title, gameId: result?.id ?? null });
-    await sleep(300); // conservative rate limit
-  }
+  // Step 1: Search each game to get ITAD game IDs (parallel)
+  const searchResults = await Promise.all(
+    titles.map(async (title) => {
+      const result = await searchGame(title);
+      await sleep(100);
+      return { title, gameId: result?.id ?? null };
+    })
+  );
 
   const validEntries = searchResults.filter((r): r is { title: string; gameId: string } => r.gameId !== null);
 

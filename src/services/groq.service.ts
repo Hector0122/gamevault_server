@@ -79,6 +79,9 @@ Basado en esto, recomiéndame EXACTAMENTE 8 juegos que:
 
 Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 2", ...]`;
 
+  const controller = new AbortController();
+  const groqTimeout = setTimeout(() => controller.abort(), 15000);
+
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -86,12 +89,13 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.85,
       max_tokens: 1024,
     }),
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(groqTimeout));
 
   if (!response.ok) {
     const err = await response.text();

@@ -68,3 +68,12 @@ model UserGame {
 
   @@unique([userId, gameId])
 }
+
+model RecommendationCache {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@map("recommendation_cache")
+}

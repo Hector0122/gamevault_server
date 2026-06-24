@@ -201,7 +201,17 @@ export async function exportGames(req: AuthRequest, res: Response, next: NextFun
 
 export async function getDeals(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const completed = await gameService.getCompletedGames(req.userId!);
+    const userId = req.userId!;
+
+    const cached = await gameService.prisma.recommendationCache.findUnique({
+      where: { userId },
+    });
+    if (cached && Date.now() - cached.createdAt.getTime() < 86400000) {
+      res.json(cached.data as any);
+      return;
+    }
+
+    const completed = await gameService.getCompletedGames(userId);
 
     if (completed.length === 0) {
       res.json({ recommendations: [], message: 'Completa al menos un juego para recibir recomendaciones' });
@@ -215,11 +225,11 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
     }));
 
     // Get all user's library titles to exclude from recommendations
-    const allTitles = await gameService.getAllUserGameTitles(req.userId!);
+    const allTitles = await gameService.getAllUserGameTitles(userId);
     const recentTitles = allTitles.slice(-50); // Limit prompt size
 
     // Get wishlist genres to influence recommendations
-    const wishlistGames = await gameService.getWishlistGames(req.userId!);
+    const wishlistGames = await gameService.getWishlistGames(userId);
     const wishlistGenres = [...new Set(wishlistGames.flatMap(ug => ug.game.genres))];
 
     // Get recommendations from Groq (excluding owned games by exact title)
@@ -273,6 +283,12 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
           url: deal.url,
         } : null,
       };
+    });
+
+    await gameService.prisma.recommendationCache.upsert({
+      where: { userId },
+      update: { data: { recommendations }, createdAt: new Date() },
+      create: { userId, data: { recommendations } },
     });
 
     res.json({ recommendations });
