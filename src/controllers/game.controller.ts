@@ -247,13 +247,22 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
       return;
     }
 
-    // Search IGDB for covers of all recommended games
+    // Search IGDB for covers of all recommended games (batched, IGDB rate limit: 4 req/s)
     const { searchGameByTitle } = await import('../services/igdb.js');
-    const coverPromises = recommendedTitles.map(async (title) => {
-      const igdbResult = await searchGameByTitle(title);
-      return { title: title.toLowerCase(), igdbResult };
-    });
-    const coverResults = await Promise.all(coverPromises);
+    const coverResults: { title: string; igdbResult: { coverUrl: string | null; genres: string[] } | null }[] = [];
+    for (let i = 0; i < recommendedTitles.length; i += 3) {
+      const batch = recommendedTitles.slice(i, i + 3);
+      const batchResults = await Promise.all(
+        batch.map(async (title) => {
+          const igdbResult = await searchGameByTitle(title);
+          return { title: title.toLowerCase(), igdbResult };
+        })
+      );
+      coverResults.push(...batchResults);
+      if (i + 3 < recommendedTitles.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
     const igdbCoverMap = new Map(
       coverResults
         .filter(r => r.igdbResult)
