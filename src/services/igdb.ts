@@ -88,13 +88,16 @@ export async function searchGameByTitle(title: string): Promise<{ coverUrl: stri
     let games = await searchTitle(title);
 
     const exact = games.find(g => g.name.toLowerCase() === title.toLowerCase());
-    const best = exact ?? games[0];
+    const withCover = games.find(g => g.cover?.url);
+    const best = (exact?.cover?.url ? exact : null) ?? withCover ?? exact ?? games[0];
 
     if (!best) {
       const words = title.split(/\s+/).filter(w => w.length > 2);
       if (words.length > 1) {
         games = await searchTitle(words.slice(0, 3).join(' '));
-        const bestAlt = games[0];
+        const bestAlt = games.find(g => g.name.toLowerCase() === title.toLowerCase())
+          ?? games.find(g => g.cover?.url)
+          ?? games[0];
         if (bestAlt) {
           return {
             coverUrl: bestAlt.cover?.url

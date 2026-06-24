@@ -207,8 +207,12 @@ export async function getDeals(req: AuthRequest, res: Response, next: NextFuncti
       where: { userId },
     });
     if (cached && Date.now() - cached.createdAt.getTime() < 86400000) {
-      res.json(cached.data as any);
-      return;
+      const data = cached.data as any;
+      const hasCovers = data.recommendations?.some((r: any) => r.coverUrl);
+      if (hasCovers) {
+        res.json(data);
+        return;
+      }
     }
 
     const completed = await gameService.getCompletedGames(userId);
