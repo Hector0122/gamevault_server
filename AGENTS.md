@@ -147,7 +147,7 @@ JWT_SECRET="gamevault-dev-secret"
 ### groq.service.ts
 - `recommendGames(completedGames, excludeTitles)` — Pide recomendaciones a Groq AI
   - Prompt: analiza géneros preferidos, pide 8 juegos (mezcla conocidos + hidden gems)
-  - Modelo: `gpt-oss-20b`
+  - Modelo: `openai/gpt-oss-20b`
   - Temperature: 0.85
 
 ### deals.service.ts
