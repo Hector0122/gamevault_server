@@ -29,7 +29,7 @@ App Android nativa + backend Express para gestionar colección de videojuegos, s
 - **IGDB v4** (búsqueda, portadas, duración)
   - Duración desde endpoint separado `game_time_to_beats`
 - **isthereanydeal.com v03** (precios y ofertas de juegos)
-- **Groq AI** (recomendaciones personalizadas via LLaMA 70B)
+- **Groq AI** (recomendaciones personalizadas via GPT OSS 20B)
 
 ---
 
@@ -147,7 +147,7 @@ JWT_SECRET="gamevault-dev-secret"
 ### groq.service.ts
 - `recommendGames(completedGames, excludeTitles)` — Pide recomendaciones a Groq AI
   - Prompt: analiza géneros preferidos, pide 8 juegos (mezcla conocidos + hidden gems)
-  - Modelo: `llama-3.3-70b-versatile`
+  - Modelo: `gpt-oss-20b`
   - Temperature: 0.85
 
 ### deals.service.ts
