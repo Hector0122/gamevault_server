@@ -89,7 +89,7 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'openai/gpt-oss-20b',
+      model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.85,
       max_tokens: 1024,
