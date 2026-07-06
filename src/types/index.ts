@@ -22,5 +22,5 @@ export interface SearchQuery {
 }
 
 export interface UpdateStatusBody {
-  status: 'WISHLIST' | 'OWNED' | 'PLAYING' | 'COMPLETED' | 'DROPPED';
+  status: "WISHLIST" | "OWNED" | "PLAYING" | "COMPLETED" | "DROPPED";
 }

@@ -1,24 +1,28 @@
-import { type Request, type Response, type NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { type Request, type Response, type NextFunction } from "express";
+import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? 'gamevault-dev-secret';
+const JWT_SECRET = process.env.JWT_SECRET ?? "gamevault-dev-secret";
 
 export interface AuthRequest extends Request {
   userId?: string;
 }
 
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+export function authMiddleware(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
   const header = req.headers.authorization;
   let token: string | null = null;
 
-  if (header && header.startsWith('Bearer ')) {
-    token = header.split(' ')[1];
+  if (header && header.startsWith("Bearer ")) {
+    token = header.split(" ")[1];
   } else if (req.query.token) {
     token = req.query.token as string;
   }
 
   if (!token) {
-    res.status(401).json({ error: 'No autorizado' });
+    res.status(401).json({ error: "No autorizado" });
     return;
   }
   try {
@@ -26,6 +30,6 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     req.userId = decoded.userId;
     next();
   } catch {
-    res.status(401).json({ error: 'Token inválido' });
+    res.status(401).json({ error: "Token inválido" });
   }
 }

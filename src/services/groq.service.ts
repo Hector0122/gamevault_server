@@ -1,4 +1,4 @@
-const GROQ_API_KEY = process.env.GROQ_API_KEY ?? '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY ?? "";
 
 interface CompletedGame {
   title: string;
@@ -6,7 +6,9 @@ interface CompletedGame {
   rating: number | null;
 }
 
-function analyzeGenres(games: CompletedGame[]): { genre: string; score: number }[] {
+function analyzeGenres(
+  games: CompletedGame[]
+): { genre: string; score: number }[] {
   const genreScores = new Map<string, number>();
   for (const g of games) {
     const weight = g.rating ? g.rating : 3;
@@ -20,14 +22,18 @@ function analyzeGenres(games: CompletedGame[]): { genre: string; score: number }
     .slice(0, 5);
 }
 
-export async function recommendGames(completedGames: CompletedGame[], excludeTitles: string[] = [], wishlistGenres: string[] = []): Promise<string[]> {
+export async function recommendGames(
+  completedGames: CompletedGame[],
+  excludeTitles: string[] = [],
+  wishlistGenres: string[] = []
+): Promise<string[]> {
   if (!GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY no configurada');
+    throw new Error("GROQ_API_KEY no configurada");
   }
 
   // Filter to only well-rated games (rating >= 3 or no rating)
   const goodGames = completedGames
-    .filter(g => g.rating == null || g.rating >= 3)
+    .filter((g) => g.rating == null || g.rating >= 3)
     .sort((a, b) => {
       // Sort by rating desc, then by title
       const ra = a.rating ?? 3;
@@ -41,24 +47,28 @@ export async function recommendGames(completedGames: CompletedGame[], excludeTit
   }
 
   const topGenres = analyzeGenres(goodGames);
-  const genreSummary = topGenres.map(g => `${g.genre} (${Math.round(g.score)} pts)`).join(', ');
+  const genreSummary = topGenres
+    .map((g) => `${g.genre} (${Math.round(g.score)} pts)`)
+    .join(", ");
 
   const gamesList = goodGames
-    .map(g => {
+    .map((g) => {
       const parts: string[] = [g.title];
-      if (g.genres.length) parts.push(`[${g.genres.join(', ')}]`);
+      if (g.genres.length) parts.push(`[${g.genres.join(", ")}]`);
       if (g.rating) parts.push(`★${g.rating}/5`);
-      return parts.join(' ');
+      return parts.join(" ");
     })
-    .join('\n');
+    .join("\n");
 
-  const excludeList = excludeTitles.length > 0
-    ? `\nJUEGOS QUE YA TENGO (nunca recomendar estos ni sus versiones/ediciones):\n${excludeTitles.slice(0, 50).join(', ')}`
-    : '';
+  const excludeList =
+    excludeTitles.length > 0
+      ? `\nJUEGOS QUE YA TENGO (nunca recomendar estos ni sus versiones/ediciones):\n${excludeTitles.slice(0, 50).join(", ")}`
+      : "";
 
-  const wishlistPart = wishlistGenres.length > 0
-    ? `\n\nADEMÁS, me interesan especialmente estos géneros (de mi lista de deseos): ${[...new Set(wishlistGenres)].join(', ')}`
-    : '';
+  const wishlistPart =
+    wishlistGenres.length > 0
+      ? `\n\nADEMÁS, me interesan especialmente estos géneros (de mi lista de deseos): ${[...new Set(wishlistGenres)].join(", ")}`
+      : "";
 
   const prompt = `Eres un experto en videojuegos. Analiza mis gustos basado en estos juegos que he completado y disfrutado:
 
@@ -82,33 +92,38 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
   const controller = new AbortController();
   const groqTimeout = setTimeout(() => controller.abort(), 15000);
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${GROQ_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.85,
-      max_tokens: 1024,
-    }),
-    signal: controller.signal,
-  }).finally(() => clearTimeout(groqTimeout));
+  const response = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.85,
+        max_tokens: 1024
+      }),
+      signal: controller.signal
+    }
+  ).finally(() => clearTimeout(groqTimeout));
 
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`Groq API error: ${response.status} ${err}`);
   }
 
-  const data = await response.json() as { choices: { message: { content: string } }[] };
-  const content = data.choices?.[0]?.message?.content ?? '[]';
+  const data = (await response.json()) as {
+    choices: { message: { content: string } }[];
+  };
+  const content = data.choices?.[0]?.message?.content ?? "[]";
 
   // Extract JSON array from response
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
-    console.warn('No JSON array found in Groq response:', content);
+    console.warn("No JSON array found in Groq response:", content);
     return [];
   }
 
@@ -116,7 +131,7 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
     const titles: string[] = JSON.parse(jsonMatch[0]);
     return titles.slice(0, 10);
   } catch {
-    console.warn('Failed to parse Groq response as JSON:', content);
+    console.warn("Failed to parse Groq response as JSON:", content);
     return [];
   }
 }
