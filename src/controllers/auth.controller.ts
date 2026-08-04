@@ -2,8 +2,7 @@ import { type Request, type Response, type NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../services/game.service.js";
-
-const JWT_SECRET = process.env.JWT_SECRET ?? "gamevault-dev-secret";
+import { JWT_SECRET } from "../config/env.js";
 
 export async function register(
   req: Request,

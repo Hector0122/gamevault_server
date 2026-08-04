@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/index.js",
+    "test": "vitest run",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "lint": "eslint src/**/*.ts",
@@ -21,6 +22,7 @@
     "dotenv": "^16.4.0",
     "exceljs": "^4.4.0",
     "express": "^4.21.0",
+    "express-rate-limit": "^8.6.2",
     "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
@@ -36,6 +38,7 @@
     "prisma": "^6.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.63.0",
+    "vitest": "^4.1.10"
   }
 }

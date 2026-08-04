@@ -272,9 +272,13 @@ export async function exportUserGames(
 
 export async function findGamesByTitles(titles: string[]) {
   if (titles.length === 0) return [];
-  const lower = titles.map((t) => t.toLowerCase());
-  const all = await prisma.game.findMany();
-  return all.filter((g) => lower.includes(g.title.toLowerCase()));
+  return prisma.game.findMany({
+    where: {
+      OR: titles.map((title) => ({
+        title: { equals: title, mode: "insensitive" }
+      }))
+    }
+  });
 }
 
 export async function getAllUserGameTitles(userId: string): Promise<string[]> {

@@ -1,7 +1,6 @@
 import { type Request, type Response, type NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET ?? "gamevault-dev-secret";
+import { JWT_SECRET } from "../config/env.js";
 
 export interface AuthRequest extends Request {
   userId?: string;

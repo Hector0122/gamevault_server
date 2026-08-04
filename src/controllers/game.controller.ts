@@ -2,6 +2,9 @@ import { type Request, type Response, type NextFunction } from "express";
 import { GameStatus, type Priority } from "@prisma/client";
 import * as gameService from "../services/game.service.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import { isAllowedImageUrl } from "../utils/url.js";
+
+const MAX_PAGE_LIMIT = 100;
 
 export async function search(
   req: AuthRequest,
@@ -47,7 +50,10 @@ export async function listGames(
 ) {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const limit = Math.min(
+      parseInt(req.query.limit as string) || 50,
+      MAX_PAGE_LIMIT
+    );
     const search = req.query.search as string | undefined;
     const status = req.query.status as GameStatus | undefined;
     const platform = req.query.platform as string | undefined;
@@ -109,6 +115,26 @@ export async function updateNotes(
   try {
     const id = req.params.id as string;
     const { rating, notes } = req.body;
+
+    if (
+      rating !== undefined &&
+      rating !== null &&
+      (typeof rating !== "number" ||
+        !Number.isInteger(rating) ||
+        rating < 0 ||
+        rating > 5)
+    ) {
+      res
+        .status(400)
+        .json({ error: "rating debe ser un entero entre 0 y 5, o null" });
+      return;
+    }
+
+    if (notes !== undefined && notes !== null && typeof notes !== "string") {
+      res.status(400).json({ error: "notes debe ser texto" });
+      return;
+    }
+
     await gameService.updateGameNotes(req.userId!, id, { rating, notes });
     res.json({ success: true });
   } catch (err) {
@@ -282,53 +308,37 @@ export async function exportGames(
   }
 }
 
-export async function getDeals(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) {
+const RECOMMENDATION_TTL_MS = 86400000;
+
+type RecommendationCacheData = {
+  status: "pending" | "ready" | "error";
+  recommendations: unknown[];
+  message?: string;
+};
+
+// El pipeline completo (Groq -> IGDB en tandas con sleeps -> ITAD) puede
+// tardar varios segundos y encadena tres APIs externas. Antes se corría
+// entero dentro de un solo request HTTP, lo que lo hacía frágil ante
+// timeouts del cliente/Railway. Ahora el endpoint responde de inmediato con
+// "pending" y el trabajo pesado corre en segundo plano; el cliente hace
+// polling hasta que el resultado queda "ready" (o "error").
+async function generateRecommendationsInBackground(userId: string) {
   try {
-    const userId = req.userId!;
-
-    const cached = await gameService.prisma.recommendationCache.findUnique({
-      where: { userId }
-    });
-    if (cached && Date.now() - cached.createdAt.getTime() < 86400000) {
-      const data = cached.data as { recommendations?: { coverUrl?: string }[] };
-      const hasCovers = data.recommendations?.some((r) => r.coverUrl);
-      if (hasCovers) {
-        res.json(data);
-        return;
-      }
-    }
-
     const completed = await gameService.getCompletedGames(userId);
-
-    if (completed.length === 0) {
-      res.json({
-        recommendations: [],
-        message: "Completa al menos un juego para recibir recomendaciones"
-      });
-      return;
-    }
-
     const completedGames = completed.map((ug) => ({
       title: ug.game.title,
       genres: ug.game.genres,
       rating: ug.rating
     }));
 
-    // Get all user's library titles to exclude from recommendations
     const allTitles = await gameService.getAllUserGameTitles(userId);
     const recentTitles = allTitles.slice(-50); // Limit prompt size
 
-    // Get wishlist genres to influence recommendations
     const wishlistGames = await gameService.getWishlistGames(userId);
     const wishlistGenres = [
       ...new Set(wishlistGames.flatMap((ug) => ug.game.genres))
     ];
 
-    // Get recommendations from Groq (excluding owned games by exact title)
     const { recommendGames } = await import("../services/groq.service.js");
     let recommendedTitles = await recommendGames(
       completedGames,
@@ -336,21 +346,34 @@ export async function getDeals(
       wishlistGenres
     );
 
-    // Filter with fuzzy matching: remove games similar to any owned game
     const { isSimilarTitle } = await import("../services/deals.service.js");
     recommendedTitles = recommendedTitles.filter(
       (rec) => !allTitles.some((owned) => isSimilarTitle(rec, owned))
     );
 
     if (recommendedTitles.length === 0) {
-      res.json({
-        recommendations: [],
-        message: "No se pudieron generar recomendaciones nuevas"
+      await gameService.prisma.recommendationCache.upsert({
+        where: { userId },
+        update: {
+          data: {
+            status: "ready",
+            recommendations: [],
+            message: "No se pudieron generar recomendaciones nuevas"
+          },
+          createdAt: new Date()
+        },
+        create: {
+          userId,
+          data: {
+            status: "ready",
+            recommendations: [],
+            message: "No se pudieron generar recomendaciones nuevas"
+          }
+        }
       });
       return;
     }
 
-    // Search IGDB for covers of all recommended games (batched, IGDB rate limit: 4 req/s)
     const { searchGameByTitle } = await import("../services/igdb.js");
     const coverResults: {
       title: string;
@@ -375,7 +398,6 @@ export async function getDeals(
         .map((r) => [r.title, r.igdbResult!])
     );
 
-    // Check deals on isthereanydeal
     const { checkDeals } = await import("../services/deals.service.js");
     const deals = await checkDeals(recommendedTitles);
 
@@ -404,11 +426,89 @@ export async function getDeals(
 
     await gameService.prisma.recommendationCache.upsert({
       where: { userId },
-      update: { data: { recommendations }, createdAt: new Date() },
-      create: { userId, data: { recommendations } }
+      update: {
+        data: { status: "ready", recommendations },
+        createdAt: new Date()
+      },
+      create: { userId, data: { status: "ready", recommendations } }
+    });
+  } catch (err) {
+    console.error("[deals] background generation failed:", err);
+    await gameService.prisma.recommendationCache
+      .upsert({
+        where: { userId },
+        update: {
+          data: {
+            status: "error",
+            recommendations: [],
+            message: "No se pudieron generar recomendaciones. Intenta de nuevo."
+          },
+          createdAt: new Date()
+        },
+        create: {
+          userId,
+          data: {
+            status: "error",
+            recommendations: [],
+            message: "No se pudieron generar recomendaciones. Intenta de nuevo."
+          }
+        }
+      })
+      .catch(() => {});
+  }
+}
+
+export async function getDeals(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const userId = req.userId!;
+
+    const cached = await gameService.prisma.recommendationCache.findUnique({
+      where: { userId }
+    });
+    const isFresh =
+      !!cached && Date.now() - cached.createdAt.getTime() < RECOMMENDATION_TTL_MS;
+
+    if (isFresh) {
+      const data = cached!.data as RecommendationCacheData;
+      if (data.status === "ready" || data.status === "error") {
+        res.json(data);
+        return;
+      }
+      if (data.status === "pending") {
+        res.status(202).json({ status: "pending", recommendations: [] });
+        return;
+      }
+    }
+
+    const completed = await gameService.getCompletedGames(userId);
+    if (completed.length === 0) {
+      res.json({
+        status: "ready",
+        recommendations: [],
+        message: "Completa al menos un juego para recibir recomendaciones"
+      });
+      return;
+    }
+
+    // Marca el cache como "pending" antes de responder, así una segunda
+    // llamada concurrente (p. ej. el usuario abre la pantalla dos veces)
+    // ve el estado pendiente en vez de disparar el pipeline dos veces.
+    await gameService.prisma.recommendationCache.upsert({
+      where: { userId },
+      update: {
+        data: { status: "pending", recommendations: [] },
+        createdAt: new Date()
+      },
+      create: { userId, data: { status: "pending", recommendations: [] } }
     });
 
-    res.json({ recommendations });
+    res.status(202).json({ status: "pending", recommendations: [] });
+
+    void generateRecommendationsInBackground(userId);
   } catch (err) {
     next(err);
   }
@@ -461,6 +561,13 @@ export async function imageProxy(
     const imageUrl = req.query.url as string;
     if (!imageUrl) {
       res.status(400).json({ error: "url parameter is required" });
+      return;
+    }
+
+    // Ruta sin autenticación: sin esta validación, cualquiera podría usar el
+    // servidor como proxy para hacer requests a cualquier URL (SSRF).
+    if (!isAllowedImageUrl(imageUrl)) {
+      res.status(400).json({ error: "url no permitida" });
       return;
     }
 
