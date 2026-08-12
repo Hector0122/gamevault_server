@@ -19,4 +19,22 @@ function resolveJwtSecret(): string {
   return "gamevault-dev-secret";
 }
 
+function resolveJwtRefreshSecret(): string {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (secret) return secret;
+
+  if (isProduction) {
+    throw new Error(
+      "JWT_REFRESH_SECRET no está configurado. No se puede iniciar el servidor en producción sin un secreto real."
+    );
+  }
+
+  console.warn(
+    "[WARN] JWT_REFRESH_SECRET no configurado — usando secreto de desarrollo. " +
+      "Configúralo en .env antes de desplegar a producción."
+  );
+  return "gamevault-dev-refresh-secret";
+}
+
 export const JWT_SECRET = resolveJwtSecret();
+export const JWT_REFRESH_SECRET = resolveJwtRefreshSecret();
