@@ -56,13 +56,19 @@ async function igdbFetch<T>(endpoint: string, body: string): Promise<T> {
 // filtro IGDB mezcla DLCs/expansiones/bundles como resultados propios junto
 // al juego base, lo que hacía la búsqueda sentirse "rara" (duplicados y
 // entradas irrelevantes por cada título).
+//
+// `| category = null` es necesario porque muchos juegos (sobre todo clásicos/
+// legacy, ej. "The Legend of Zelda" de NES) no tienen el campo `category`
+// poblado en IGDB — es NULL, no 0 — y NULL nunca matchea un `=` de lista, así
+// que sin esta cláusula el filtro los excluía por completo y búsquedas tan
+// comunes como "zelda" devolvían un array vacío.
 const MAIN_GAME_CATEGORIES = '0,4,8,9,10,11';
 
 export async function searchGames(query: string, offset = 0): Promise<IGDBGame[]> {
   const games = await igdbFetch<IGDBGame[]>('games', `
     search "${query}";
     fields name,summary,cover.url,first_release_date,platforms.name,genres.name;
-    where category = (${MAIN_GAME_CATEGORIES});
+    where category = (${MAIN_GAME_CATEGORIES}) | category = null;
     limit 20;
     offset ${offset};
   `);
