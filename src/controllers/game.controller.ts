@@ -345,7 +345,12 @@ async function generateRecommendationsInBackground(userId: string) {
     }));
 
     const allTitles = await gameService.getAllUserGameTitles(userId);
-    const recentTitles = allTitles.slice(-50); // Limit prompt size
+    // Antes se mandaban solo los últimos 50 (en un orden ni siquiera
+    // significativo, sin ORDER BY) como exclude list — con bibliotecas
+    // grandes, Groq no sabía de la mayoría de lo que el usuario ya tenía y
+    // recomendaba títulos que el filtro de abajo (isSimilarTitle) terminaba
+    // descartando, dejando pocas o cero recomendaciones sobrevivientes.
+    // Ahora se manda la biblioteca completa.
 
     const wishlistGames = await gameService.getWishlistGames(userId);
     const wishlistGenres = [
@@ -355,7 +360,7 @@ async function generateRecommendationsInBackground(userId: string) {
     const { recommendGames } = await import("../services/groq.service.js");
     let recommendedTitles = await recommendGames(
       completedGames,
-      recentTitles,
+      allTitles,
       wishlistGenres
     );
 

@@ -22,6 +22,35 @@ function analyzeGenres(
     .slice(0, 5);
 }
 
+// Prioriza juegos calificados 4-5★ (señal de gusto fuerte); solo recurre a
+// 3★ o a completados sin calificar si no hay suficientes para llenar el
+// pool. Antes se mezclaba todo rating>=3 (y los sin calificar) de una vez,
+// así que un puñado de 3★ podía diluir la señal de género frente a los
+// favoritos reales del usuario.
+function pickTopRated(
+  games: CompletedGame[],
+  limit: number
+): CompletedGame[] {
+  const byRatingDesc = [...games].sort(
+    (a, b) => (b.rating ?? 0) - (a.rating ?? 0)
+  );
+  const topTier = byRatingDesc.filter((g) => (g.rating ?? 0) >= 4);
+  if (topTier.length >= limit) return topTier.slice(0, limit);
+
+  const midTier = byRatingDesc.filter((g) => g.rating === 3);
+  const withMidTier = [...topTier, ...midTier];
+  if (withMidTier.length >= limit) return withMidTier.slice(0, limit);
+
+  const unrated = byRatingDesc.filter((g) => g.rating == null);
+  return [...withMidTier, ...unrated].slice(0, limit);
+}
+
+function formatGame(g: CompletedGame): string {
+  const parts: string[] = [g.title];
+  if (g.genres.length) parts.push(`[${g.genres.join(", ")}]`);
+  return parts.join(" ");
+}
+
 export async function recommendGames(
   completedGames: CompletedGame[],
   excludeTitles: string[] = [],
@@ -31,16 +60,7 @@ export async function recommendGames(
     throw new Error("GROQ_API_KEY no configurada");
   }
 
-  // Filter to only well-rated games (rating >= 3 or no rating)
-  const goodGames = completedGames
-    .filter((g) => g.rating == null || g.rating >= 3)
-    .sort((a, b) => {
-      // Sort by rating desc, then by title
-      const ra = a.rating ?? 3;
-      const rb = b.rating ?? 3;
-      return rb - ra;
-    })
-    .slice(0, 20); // Top 20 best-rated games
+  const goodGames = pickTopRated(completedGames, 20);
 
   if (goodGames.length === 0) {
     return [];
@@ -51,18 +71,35 @@ export async function recommendGames(
     .map((g) => `${g.genre} (${Math.round(g.score)} pts)`)
     .join(", ");
 
-  const gamesList = goodGames
-    .map((g) => {
-      const parts: string[] = [g.title];
-      if (g.genres.length) parts.push(`[${g.genres.join(", ")}]`);
-      if (g.rating) parts.push(`★${g.rating}/5`);
-      return parts.join(" ");
-    })
-    .join("\n");
+  // Separado por tier de rating en vez de una sola lista con "★N/5" al
+  // final de cada línea — así el modelo pesa más los 5★ como mis
+  // favoritos reales en vez de tratar toda la lista por igual.
+  const fiveStar = goodGames.filter((g) => g.rating === 5);
+  const fourStar = goodGames.filter((g) => g.rating === 4);
+  const rest = goodGames.filter((g) => (g.rating ?? 0) < 4);
 
+  const tiersList = [
+    fiveStar.length
+      ? `MIS FAVORITOS ABSOLUTOS (5★, el gusto más fuerte que tengo):\n${fiveStar.map(formatGame).join("\n")}`
+      : null,
+    fourStar.length
+      ? `TAMBIÉN ME ENCANTARON (4★):\n${fourStar.map(formatGame).join("\n")}`
+      : null,
+    rest.length
+      ? `ME GUSTARON, PERO MENOS (3★ o sin calificar):\n${rest.map(formatGame).join("\n")}`
+      : null
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  // Cap defensivo: con bibliotecas grandes, mandar cada título eleva mucho
+  // el tamaño del prompt (y Groq cuenta max_tokens completo, no el uso
+  // real, contra el límite de tokens/minuto de la cuenta). 300 ya cubre
+  // holgadamente una biblioteca personal típica sin arriesgar 429s.
+  const cappedExcludeTitles = excludeTitles.slice(0, 300);
   const excludeList =
-    excludeTitles.length > 0
-      ? `\nJUEGOS QUE YA TENGO (nunca recomendar estos ni sus versiones/ediciones):\n${excludeTitles.slice(0, 50).join(", ")}`
+    cappedExcludeTitles.length > 0
+      ? `\n\nJUEGOS QUE YA TENGO — tengo ${excludeTitles.length} en total, nunca recomendar ninguno de estos ni sus versiones/ediciones (dado el tamaño de mi colección, es muy probable que ya tenga los títulos más populares, así que prioriza los que NO aparezcan aquí):\n${cappedExcludeTitles.join(", ")}`
       : "";
 
   const wishlistPart =
@@ -70,24 +107,24 @@ export async function recommendGames(
       ? `\n\nADEMÁS, me interesan especialmente estos géneros (de mi lista de deseos): ${[...new Set(wishlistGenres)].join(", ")}`
       : "";
 
-  const prompt = `Eres un experto en videojuegos. Analiza mis gustos basado en estos juegos que he completado y disfrutado:
+  const prompt = `Eres un experto en videojuegos. Analiza mis gustos basado en estos juegos que he completado y disfrutado, ordenados de más a menos favorito:
 
-${gamesList}
+${tiersList}
 ${excludeList}
 ${wishlistPart}
 
 MIS GÉNEROS PREFERIDOS (ordenados por importancia): ${genreSummary}
 
-Basado en esto, recomiéndame EXACTAMENTE 8 juegos que:
-1. Sean del mismo estilo/género que mis favoritos pero NO sean los obvios que todo el mundo conoce
+Basado en esto, recomiéndame EXACTAMENTE 12 juegos que:
+1. Se parezcan más a mis 5★ que al resto — esos son mi gusto más fuerte, no los traites igual que el resto de la lista
 2. Tengan buena crítica (Metacritic 80+ o Very Positive en Steam)
 3. Sean de 2015 en adelante (no retro)
-4. Sean una mezcla: 4 muy conocidos y 4 "hidden gems" menos mainstream pero igual de buenos
+4. Prioricen "hidden gems" menos mainstream por sobre juegos muy famosos — dado el tamaño de mi colección lo más probable es que ya tenga los obvios; como máximo 3 de los 12 pueden ser títulos AAA muy conocidos
 5. NO sean secuelas de juegos que ya tengo
 6. Incluyan variedad: no todos del mismo género
 7. Sean juegos que realmente valgan la pena jugar, no relleno
 
-Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 2", ...]`;
+Devuelve SOLO un array JSON de exactamente 12 strings, ordenado del que más creas que me va a gustar al que menos. Ejemplo: ["Game 1", "Game 2", ...]`;
 
   const controller = new AbortController();
   const groqTimeout = setTimeout(() => controller.abort(), 15000);
@@ -108,12 +145,20 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
         model: "openai/gpt-oss-120b",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.85,
-        max_tokens: 1024,
+        // OJO: Groq cuenta max_tokens completo (no el uso real) contra el
+        // límite de tokens-por-minuto de la cuenta — con 2048 una sola
+        // llamada se comía la mitad del TPM disponible (8000 en el tier
+        // gratis) y un segundo intento rápido (ej. "Actualizar" dos veces)
+        // tiraba 429. Pero bajarlo a 1024 se quedó corto alguna vez (12
+        // títulos + razonamiento se pasaron del budget y el JSON quedó
+        // truncado a medias). 1536 es el punto medio: uso real visto ronda
+        // 400-500 tokens (~900 de sobra) sin acercarse al límite de TPM.
+        max_tokens: 1536,
         // gpt-oss es un modelo "reasoning": por defecto puede gastar el
         // budget de max_tokens entero pensando y dejar `content` vacío
         // (se vio con prompts grandes: 900+ de 1024 tokens en puro
         // razonamiento, respuesta final vacía). "low" alcanza de sobra para
-        // esta tarea (elegir 8 títulos) y evita quedarse sin tokens.
+        // esta tarea (elegir 12 títulos) y evita quedarse sin tokens.
         reasoning_effort: "low"
       }),
       signal: controller.signal
@@ -139,7 +184,7 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
 
   try {
     const titles: string[] = JSON.parse(jsonMatch[0]);
-    return titles.slice(0, 10);
+    return titles.slice(0, 12);
   } catch {
     console.warn("Failed to parse Groq response as JSON:", content);
     return [];
