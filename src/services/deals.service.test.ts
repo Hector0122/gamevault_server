@@ -31,4 +31,18 @@ describe("isSimilarTitle", () => {
       isSimilarTitle("Grand Theft Auto V", "Grand Theft Auto: Vice City")
     ).toBe(false);
   });
+
+  it("no confunde una secuela numerada con una reedición del original", () => {
+    // Bug real: tras quitarle "Definitive Edition", "Dishonored: Definitive
+    // Edition" queda en "dishonored", que es prefijo de "dishonored 2" —
+    // eso los marcaba como el mismo juego y filtraba secuelas legítimas de
+    // las recomendaciones.
+    expect(
+      isSimilarTitle("Dishonored 2", "Dishonored: Definitive Edition")
+    ).toBe(false);
+    expect(isSimilarTitle("Mass Effect 2", "Mass Effect")).toBe(false);
+    expect(isSimilarTitle("Final Fantasy XVI", "Final Fantasy VII")).toBe(
+      false
+    );
+  });
 });

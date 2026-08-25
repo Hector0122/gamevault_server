@@ -108,7 +108,13 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
         model: "openai/gpt-oss-120b",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.85,
-        max_tokens: 1024
+        max_tokens: 1024,
+        // gpt-oss es un modelo "reasoning": por defecto puede gastar el
+        // budget de max_tokens entero pensando y dejar `content` vacío
+        // (se vio con prompts grandes: 900+ de 1024 tokens en puro
+        // razonamiento, respuesta final vacía). "low" alcanza de sobra para
+        // esta tarea (elegir 8 títulos) y evita quedarse sin tokens.
+        reasoning_effort: "low"
       }),
       signal: controller.signal
     }

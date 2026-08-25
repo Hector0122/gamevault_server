@@ -168,12 +168,32 @@ function normalizeForCompare(title: string): string {
   return normalized;
 }
 
+// "dishonored 2" contiene a "dishonored" como prefijo pero es un juego
+// distinto, no una reedición — si lo que sigue al prefijo arranca con un
+// número/numeral romano (indicio de secuela), no cuenta como el mismo
+// juego solo por contención. Cuando el título corto aparece en otra
+// posición (ej. "skyrim" al final de "the elder scrolls v: skyrim special
+// edition") sí se mantiene el criterio de contención original.
+function isNumberedSequel(shorter: string, longer: string): boolean {
+  if (!longer.startsWith(shorter)) return false;
+  const rest = longer.slice(shorter.length).trim();
+  return /^(\d+|i{1,3}|iv|vi{0,3}|ix|x)\b/i.test(rest);
+}
+
 export function isSimilarTitle(titleA: string, titleB: string): boolean {
   const a = normalizeForCompare(titleA);
   const b = normalizeForCompare(titleB);
 
   if (a === b) return true;
-  if (a.includes(b) || b.includes(a)) return true;
+
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  // Corta antes de la contención Y del overlap por palabras: "mass effect
+  // 2" comparte 2/3 palabras con "mass effect" (overlap 0.67 ≥ 0.6), pero
+  // son juegos distintos — el patrón "base + número" gana sobre ambas
+  // heurísticas de similitud.
+  if (isNumberedSequel(shorter, longer)) return false;
+
+  if (longer.includes(shorter)) return true;
 
   const wordsA = new Set(a.split(/\s+/));
   const wordsB = new Set(b.split(/\s+/));
