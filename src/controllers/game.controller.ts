@@ -234,6 +234,19 @@ export async function getUserGameIds(
   }
 }
 
+export async function getFacets(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const facets = await gameService.getUserGameFacets(req.userId!);
+    res.json(facets);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function exportGames(
   req: AuthRequest,
   res: Response,

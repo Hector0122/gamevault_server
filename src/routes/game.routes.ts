@@ -9,6 +9,7 @@ router.get("/search", authMiddleware, externalApiLimiter, controller.search);
 router.post("/games", authMiddleware, controller.addGame);
 router.get("/games", authMiddleware, controller.listGames);
 router.get("/games/ids", authMiddleware, controller.getUserGameIds);
+router.get("/games/facets", authMiddleware, controller.getFacets);
 router.patch("/games/:id/status", authMiddleware, controller.updateStatus);
 router.patch("/games/:id/hours", authMiddleware, controller.updateHours);
 router.patch("/games/:id/notes", authMiddleware, controller.updateNotes);

@@ -307,6 +307,33 @@ export async function getWishlistGames(userId: string) {
   });
 }
 
+export async function getUserGameFacets(userId: string) {
+  // Distinct sobre toda la biblioteca del usuario, no solo la página cargada
+  // en el cliente — las opciones de filtro deben reflejar todos los juegos,
+  // no solo los que ya llegaron por paginación.
+  const [platformRows, genreRows] = await Promise.all([
+    prisma.$queryRaw<Array<{ value: string }>>`
+      SELECT DISTINCT unnest(g.platforms) AS value
+      FROM "Game" g
+      JOIN "UserGame" ug ON ug."gameId" = g.id
+      WHERE ug."userId" = ${userId}
+      ORDER BY value
+    `,
+    prisma.$queryRaw<Array<{ value: string }>>`
+      SELECT DISTINCT unnest(g.genres) AS value
+      FROM "Game" g
+      JOIN "UserGame" ug ON ug."gameId" = g.id
+      WHERE ug."userId" = ${userId}
+      ORDER BY value
+    `,
+  ]);
+
+  return {
+    platforms: platformRows.map((r) => r.value),
+    genres: genreRows.map((r) => r.value),
+  };
+}
+
 export async function getUserGameExternalIds(userId: string) {
   const rows = await prisma.userGame.findMany({
     where: { userId },

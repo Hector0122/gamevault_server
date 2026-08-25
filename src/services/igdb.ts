@@ -50,10 +50,19 @@ async function igdbFetch<T>(endpoint: string, body: string): Promise<T> {
   return res.json();
 }
 
+// category: 0=main_game, 4=standalone_expansion, 8=remake, 9=remaster,
+// 10=expanded_game, 11=port. Excluye dlc_addon(1), expansion(2), bundle(3),
+// mod(5), episode(6), season(7), fork(12), pack(13), update(14) — sin este
+// filtro IGDB mezcla DLCs/expansiones/bundles como resultados propios junto
+// al juego base, lo que hacía la búsqueda sentirse "rara" (duplicados y
+// entradas irrelevantes por cada título).
+const MAIN_GAME_CATEGORIES = '0,4,8,9,10,11';
+
 export async function searchGames(query: string, offset = 0): Promise<IGDBGame[]> {
   const games = await igdbFetch<IGDBGame[]>('games', `
     search "${query}";
     fields name,summary,cover.url,first_release_date,platforms.name,genres.name;
+    where category = (${MAIN_GAME_CATEGORIES});
     limit 20;
     offset ${offset};
   `);
