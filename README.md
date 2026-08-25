@@ -1,4 +1,4 @@
-# GameVault — Backend
+# GameVault 🎮 — Backend
 
 API para GameVault, una app de backlog de videojuegos para Android. Capturas y descripción completa: **[gamevault_frontend](https://github.com/Hector0122/gamevault_frontend)**.
 
