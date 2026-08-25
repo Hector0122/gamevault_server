@@ -101,7 +101,11 @@ Devuelve SOLO un array JSON de exactamente 8 strings. Ejemplo: ["Game 1", "Game 
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        // "llama-3.3-70b-versatile" fue retirado del catálogo de Groq (la
+        // API ya responde 404 "model_not_found" para ese id) — era la causa
+        // de que la generación de recomendaciones fallara siempre y cayera
+        // al mensaje de error genérico.
+        model: "openai/gpt-oss-120b",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.85,
         max_tokens: 1024
